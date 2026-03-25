@@ -2,13 +2,20 @@
 
 ## Status
 
-This document describes the Rust rewrite direction for the extracted auto-UI
-repo.
+This document describes the Rust architecture for `auto-ui`.
 
-The repo now includes a working Rust implementation for the existing
-`rust-chatbot` flows. The current code is still a narrow CLI-focused port, so
-the broader adapter split described below remains the target architecture rather
-than the exact crate layout on disk today.
+The migration from the extracted single-purpose tooling into a Rust workspace is
+implemented. The repo now contains:
+
+- a CLI crate
+- a shared core crate
+- a report/artifact crate
+- an X11 driver crate
+- a `rust-chatbot` adapter crate
+- a `gpui-component-testing` adapter crate
+
+The remaining work is no longer the migration itself. It is the follow-on
+hardening and extension work documented in [REMAINING.md](/home/m/git/auto-ui/REMAINING.md).
 
 ## Problem
 
@@ -103,15 +110,21 @@ Recommended safeguards:
 
 ## High-Level Architecture
 
-The repo is now a Cargo workspace. Today it contains a single CLI crate that
-ports the original behavior; the longer-term goal is still a small set of
-focused library crates around that CLI.
+The repo is now a Cargo workspace with the planned split in place.
 
 ```text
 auto-ui/
 ├── Cargo.toml
 ├── crates/
-│   └── auto-ui-cli/
+│   ├── auto-ui-cli/
+│   ├── auto-ui-core/
+│   ├── auto-ui-artifacts/
+│   ├── auto-ui-driver-x11/
+│   ├── auto-ui-adapter-rust-chatbot/
+│   └── auto-ui-adapter-gpui/
+├── examples/
+├── DESIGN.md
+└── REMAINING.md
 ```
 
 ## Core Components
@@ -571,25 +584,25 @@ boundary.
 
 ## Migration Plan
 
-### Phase 1
+### Phase 1: Completed
 
 - create the Cargo workspace
 - implement `auto-ui-cli`, `auto-ui-core`, `auto-ui-driver-x11`
 - port the current `rust-chatbot` width scan behavior
 
-### Phase 2
+### Phase 2: Completed
 
 - implement `auto-ui-adapter-gpui`
 - support startup-driven env-based runs
 - import gpui-generated CSV/log/markdown artifacts
 
-### Phase 3
+### Phase 3: Remaining
 
-- add TOML scenario files
-- remove hard-coded session lists from the CLI
+- stabilize the TOML scenario format now that scenario files exist
+- reduce or remove hard-coded default session lists from convenience commands
 - stabilize `report.json` schema
 
-### Phase 4
+### Phase 4: Remaining
 
 - add richer summaries and inspection tools
 - add alternative window drivers
@@ -637,11 +650,8 @@ boundary.
 
 ## Recommendation
 
-Start with a workspace, but keep the first implementation narrow:
+The migration path described above is now in place. The best next work is:
 
-1. Port the existing `rust-chatbot` flow into Rust with an adapter boundary.
-2. Add `gpui-component-testing` as the second adapter immediately.
-3. Make startup-driven scenarios a first-class execution strategy from day one.
-
-That gives the repo a real generic center instead of another app-specific
-rewrite.
+1. Stabilize the scenario and report schemas.
+2. Add smoke and golden tests for both adapters.
+3. Improve driver coverage and packaging without undoing the current adapter split.

@@ -100,3 +100,8 @@ active workflow.
 
 The workspace migration is implemented. The remaining work is refinement and
 extension rather than the original architectural split.
+
+See:
+
+- [DESIGN.md](/home/m/git/auto-ui/DESIGN.md) for the implemented architecture and target shape
+- [REMAINING.md](/home/m/git/auto-ui/REMAINING.md) for the post-migration backlog
