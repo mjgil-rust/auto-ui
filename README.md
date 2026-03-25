@@ -1,55 +1,65 @@
 # auto-ui
 
-Standalone UI automation helpers for the `rust-chatbot` desktop app.
+Rust desktop UI automation helpers for the `rust-chatbot` desktop app.
 
-This repo extracts the auto-UI debug scripts from the main app repo so they can
-be versioned separately while still driving an existing `rust-chatbot`
-checkout.
+This repo contains the Rust rewrite of the extracted auto-UI tooling from the
+main app repo. It drives an existing `rust-chatbot` checkout and keeps build
+orchestration outside the automation loop.
 
 ## What it contains
 
-- `scripts/auto_ui_debug.py`: cycles sessions across window widths and collects
+- `Cargo.toml`: workspace root
+- `crates/auto-ui-cli`: Rust CLI implementation
+- `auto-ui debug`: cycles sessions across window widths and collects
   screenshots plus `ui_auto_debug` trace bundles
-- `scripts/auto_ui_header_debug.py`: launches a single session and captures
+- `auto-ui header-debug`: launches a single session and captures
   header-focused crops and metrics
-- `scripts/auto_ui_common.py`: shared window, trace, and filesystem helpers
 
 ## Requirements
 
 - Linux desktop session with `DISPLAY` set
+- Rust toolchain installed locally
 - `xdotool`
 - `wmctrl`
 - ImageMagick tools: `import`, `convert`, `identify`
 - A separate `rust-chatbot` checkout with release binaries already built
 
-The extracted scripts do not build `rust-chatbot` themselves. Build the target
-app through your lightweight build path first, then point these scripts at that
-checkout.
+This repo does not build `rust-chatbot` itself. Build the target app through
+your lightweight build path first, then point `auto-ui` at that checkout. Build
+this repo through the same lightweight path before running the binary.
 
 ## Target app path
 
-The scripts resolve the target app root in this order:
+The CLI resolves the target app root in this order:
 
 1. `--app-root /path/to/rust-chatbot`
 2. `RUST_CHATBOT_APP_ROOT`
 3. `RUST_CHATBOT_ROOT`
 4. sibling checkout at `/home/m/git/rust-chatbot` relative to this repo
 
+## Commands
+
+- `debug`: width scan across sessions
+- `header-debug`: single-session header capture flow
+
 ## Examples
 
+See [examples/README.md](/home/m/git/auto-ui/examples/README.md) for a small
+set of copyable example invocations.
+
 ```bash
-python3 scripts/auto_ui_debug.py --provider codex
+target/debug/auto-ui debug --provider codex
 ```
 
 ```bash
-python3 scripts/auto_ui_debug.py \
+target/debug/auto-ui debug \
   --app-root /home/m/git/rust-chatbot \
   --provider codex \
   --session-id 64ee1661-b53f-4134-8855-cc2c25a06ddd
 ```
 
 ```bash
-python3 scripts/auto_ui_header_debug.py \
+target/debug/auto-ui header-debug \
   --app-root /home/m/git/rust-chatbot \
   --provider codex \
   --session-name "rcc-header"
@@ -73,3 +83,9 @@ active workflow.
   focused app.
 - Avoid switching workspaces, sending global shortcuts, or using the clipboard
   when another mechanism is available.
+
+## Status
+
+The current Rust implementation is focused on parity with the original
+`rust-chatbot` flows. The broader generic-adapter split described in
+`DESIGN.md` is still planned work.

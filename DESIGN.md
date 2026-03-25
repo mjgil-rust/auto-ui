@@ -2,8 +2,13 @@
 
 ## Status
 
-This document describes the intended Rust rewrite of the extracted auto-UI repo.
-It is design-only. No Rust implementation is included yet.
+This document describes the Rust rewrite direction for the extracted auto-UI
+repo.
+
+The repo now includes a working Rust implementation for the existing
+`rust-chatbot` flows. The current code is still a narrow CLI-focused port, so
+the broader adapter split described below remains the target architecture rather
+than the exact crate layout on disk today.
 
 ## Problem
 
@@ -98,20 +103,15 @@ Recommended safeguards:
 
 ## High-Level Architecture
 
-The Rust rewrite should be a Cargo workspace with one CLI crate and a small set
-of focused library crates.
+The repo is now a Cargo workspace. Today it contains a single CLI crate that
+ports the original behavior; the longer-term goal is still a small set of
+focused library crates around that CLI.
 
 ```text
 auto-ui/
 ├── Cargo.toml
 ├── crates/
-│   ├── auto-ui-cli/
-│   ├── auto-ui-core/
-│   ├── auto-ui-artifacts/
-│   ├── auto-ui-driver-x11/
-│   ├── auto-ui-adapter-rust-chatbot/
-│   └── auto-ui-adapter-gpui/
-└── docs/
+│   └── auto-ui-cli/
 ```
 
 ## Core Components
