@@ -1,0 +1,10 @@
+[package]
+name = "auto-ui-driver-x11"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+auto-ui-core = { path = "../auto-ui-core" }
+regex.workspace = true
+serde.workspace = true

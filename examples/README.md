@@ -4,15 +4,18 @@ This directory contains example usage for the current `auto-ui` CLI.
 
 ## Current commands
 
+- [help.md](/home/m/git/auto-ui/examples/help.md):
+  current CLI help snapshots and discovery commands
 - [rust-chatbot-debug.md](/home/m/git/auto-ui/examples/rust-chatbot-debug.md):
   width-scan flows for `rust-chatbot`
 - [rust-chatbot-header-debug.md](/home/m/git/auto-ui/examples/rust-chatbot-header-debug.md):
   single-session header capture flows for `rust-chatbot`
+- [gpui-component-testing.md](/home/m/git/auto-ui/examples/gpui-component-testing.md):
+  startup-driven scenarios for `gpui-component-testing`
 
-## Planned target
+## Scenario files
 
-- [gpui-component-testing-planned.md](/home/m/git/auto-ui/examples/gpui-component-testing-planned.md):
-  intended adapter usage once the gpui target lands
-
-The gpui example is design guidance only. It is not supported by the current
-CLI yet.
+- [rust-chatbot-debug.toml](/home/m/git/auto-ui/examples/rust-chatbot-debug.toml)
+- [rust-chatbot-header-debug.toml](/home/m/git/auto-ui/examples/rust-chatbot-header-debug.toml)
+- [gpui-scroll-matrix.toml](/home/m/git/auto-ui/examples/gpui-scroll-matrix.toml)
+- [gpui-scrollbar-trace.toml](/home/m/git/auto-ui/examples/gpui-scrollbar-trace.toml)

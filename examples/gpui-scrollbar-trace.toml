@@ -1,0 +1,17 @@
+target = "gpui_component_testing"
+scenario = "scrollbar_trace"
+
+[app]
+root = "/home/m/git/gpui-component-testing"
+example = "llm_chat_story_style_scrollbar_demo"
+
+[trace]
+run_ms = 4000
+warmup_ms = 1000
+scroll_delay_ms = 16
+scroll_step_px = 40
+window_title = "Auto UI GPUI Scrollbar Trace"
+
+[capture]
+capture_window = false
+settle_ms = 800

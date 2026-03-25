@@ -1,0 +1,12 @@
+[package]
+name = "auto-ui-adapter-gpui"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+auto-ui-artifacts = { path = "../auto-ui-artifacts" }
+auto-ui-core = { path = "../auto-ui-core" }
+auto-ui-driver-x11 = { path = "../auto-ui-driver-x11" }
+serde.workspace = true
+serde_json.workspace = true

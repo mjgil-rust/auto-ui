@@ -12,6 +12,13 @@ target/debug/auto-ui header-debug \
   --session-name "rcc-header"
 ```
 
+## Generic runner with scenario file
+
+```bash
+cd /home/m/git/auto-ui
+target/debug/auto-ui run --config examples/rust-chatbot-header-debug.toml
+```
+
 What it does:
 
 - launches directly into the target session

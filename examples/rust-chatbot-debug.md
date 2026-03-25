@@ -10,6 +10,13 @@ cd /home/m/git/auto-ui
 target/debug/auto-ui debug --provider codex
 ```
 
+## Generic runner with scenario file
+
+```bash
+cd /home/m/git/auto-ui
+target/debug/auto-ui run --config examples/rust-chatbot-debug.toml
+```
+
 What it does:
 
 - resolves the target app root

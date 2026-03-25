@@ -1,19 +1,20 @@
 # auto-ui
 
-Rust desktop UI automation helpers for the `rust-chatbot` desktop app.
+Rust desktop UI automation helpers for desktop apps that can be driven either
+through live window interaction or startup-driven scenarios.
 
-This repo contains the Rust rewrite of the extracted auto-UI tooling from the
-main app repo. It drives an existing `rust-chatbot` checkout and keeps build
-orchestration outside the automation loop.
+This repo currently supports both `rust-chatbot` and
+`gpui-component-testing`.
 
 ## What it contains
 
 - `Cargo.toml`: workspace root
-- `crates/auto-ui-cli`: Rust CLI implementation
-- `auto-ui debug`: cycles sessions across window widths and collects
-  screenshots plus `ui_auto_debug` trace bundles
-- `auto-ui header-debug`: launches a single session and captures
-  header-focused crops and metrics
+- `crates/auto-ui-cli`: CLI implementation
+- `crates/auto-ui-core`: shared command, path, and scenario helpers
+- `crates/auto-ui-artifacts`: report and artifact schema
+- `crates/auto-ui-driver-x11`: Linux/X11 window and screenshot driver
+- `crates/auto-ui-adapter-rust-chatbot`: rust-chatbot adapter
+- `crates/auto-ui-adapter-gpui`: gpui-component-testing adapter
 
 ## Requirements
 
@@ -22,25 +23,32 @@ orchestration outside the automation loop.
 - `xdotool`
 - `wmctrl`
 - ImageMagick tools: `import`, `convert`, `identify`
-- A separate `rust-chatbot` checkout with release binaries already built
+- A separate target app checkout with release binaries already built
 
-This repo does not build `rust-chatbot` itself. Build the target app through
-your lightweight build path first, then point `auto-ui` at that checkout. Build
-this repo through the same lightweight path before running the binary.
+This repo does not build target apps itself. Build the target app through your
+lightweight build path first, then point `auto-ui` at that checkout. Build this
+repo through the same lightweight path before running the binary.
 
-## Target app path
+## Target roots
 
-The CLI resolves the target app root in this order:
-
-1. `--app-root /path/to/rust-chatbot`
-2. `RUST_CHATBOT_APP_ROOT`
-3. `RUST_CHATBOT_ROOT`
-4. sibling checkout at `/home/m/git/rust-chatbot` relative to this repo
+- `rust-chatbot`
+  1. `--app-root`
+  2. `RUST_CHATBOT_APP_ROOT`
+  3. `RUST_CHATBOT_ROOT`
+  4. sibling checkout at `/home/m/git/rust-chatbot`
+- `gpui-component-testing`
+  1. app root in the scenario file
+  2. `GPUI_COMPONENT_TESTING_ROOT`
+  3. `AUTO_UI_GPUI_APP_ROOT`
+  4. sibling checkout at `/home/m/git/gpui-component-testing`
 
 ## Commands
 
-- `debug`: width scan across sessions
-- `header-debug`: single-session header capture flow
+- `debug`: rust-chatbot width scan across sessions
+- `header-debug`: rust-chatbot single-session header capture flow
+- `run --config <file.toml>`: generic scenario runner
+- `targets`: list supported targets
+- `scenarios [--target <name>]`: list supported scenarios
 
 ## Examples
 
@@ -65,6 +73,10 @@ target/debug/auto-ui header-debug \
   --session-name "rcc-header"
 ```
 
+```bash
+target/debug/auto-ui run --config examples/gpui-scroll-matrix.toml
+```
+
 Artifacts land under `tmp/` in this repo unless `--output-dir` is provided.
 
 ## Desktop Behavior
@@ -86,6 +98,5 @@ active workflow.
 
 ## Status
 
-The current Rust implementation is focused on parity with the original
-`rust-chatbot` flows. The broader generic-adapter split described in
-`DESIGN.md` is still planned work.
+The workspace migration is implemented. The remaining work is refinement and
+extension rather than the original architectural split.

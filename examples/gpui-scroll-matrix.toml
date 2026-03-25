@@ -1,0 +1,23 @@
+target = "gpui_component_testing"
+scenario = "scroll_matrix"
+
+[app]
+root = "/home/m/git/gpui-component-testing"
+example = "llm_chat_story_style_bench_demo"
+
+[bench]
+variants = [
+  "cached_parent_scroll_markdown",
+  "cached_markdown",
+  "cached_parent_scroll_selectable_off",
+  "plain_text",
+]
+run_ms = 12000
+warmup_ms = 1500
+scroll_delay_ms = 16
+scroll_step_px = 40
+window_title_prefix = "Auto UI GPUI Scroll Matrix"
+
+[capture]
+capture_window = false
+settle_ms = 800
