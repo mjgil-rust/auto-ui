@@ -113,3 +113,113 @@ pub fn write_report(output_dir: &Path, report: &Report) -> Result<PathBuf> {
         .with_context(|| format!("failed to write {}", report_path.display()))?;
     Ok(report_path)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn unique_temp_dir(name: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!("auto-ui-{name}-{nanos}-{}", std::process::id()))
+    }
+
+    fn fixed_report() -> Report {
+        Report {
+            schema_version: "1".to_string(),
+            tool_version: "0.1.0".to_string(),
+            target: "rust_chatbot".to_string(),
+            scenario: "debug".to_string(),
+            mode: "hybrid".to_string(),
+            app_root: "/tmp/app".to_string(),
+            run_id: "20260326-120000".to_string(),
+            started_at: "2026-03-26T12:00:00Z".to_string(),
+            finished_at: Some("2026-03-26T12:00:01Z".to_string()),
+            status: "ok".to_string(),
+            status_message: None,
+            artifacts: vec![ArtifactRef {
+                kind: "progress_log".to_string(),
+                path: "/tmp/out/progress.log".to_string(),
+                description: Some("live progress log".to_string()),
+                metadata: Value::Null,
+            }],
+            measurements: vec![json!({"name": "sample", "value": 1})],
+            events: vec![json!({"kind": "started"})],
+            details: json!({"widths": [520, 900]}),
+        }
+    }
+
+    #[test]
+    fn report_json_matches_expected_schema_shape() {
+        let actual = serde_json::to_value(fixed_report()).unwrap();
+        let expected = json!({
+            "schema_version": "1",
+            "tool_version": "0.1.0",
+            "target": "rust_chatbot",
+            "scenario": "debug",
+            "mode": "hybrid",
+            "app_root": "/tmp/app",
+            "run_id": "20260326-120000",
+            "started_at": "2026-03-26T12:00:00Z",
+            "finished_at": "2026-03-26T12:00:01Z",
+            "status": "ok",
+            "artifacts": [
+                {
+                    "kind": "progress_log",
+                    "path": "/tmp/out/progress.log",
+                    "description": "live progress log"
+                }
+            ],
+            "measurements": [
+                {
+                    "name": "sample",
+                    "value": 1
+                }
+            ],
+            "events": [
+                {
+                    "kind": "started"
+                }
+            ],
+            "details": {
+                "widths": [520, 900]
+            }
+        });
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn finish_methods_update_status_fields() {
+        let mut report = Report::new("rust_chatbot", "debug", "hybrid", Path::new("/tmp/app"));
+        report.finish_error("failed");
+        assert_eq!(report.status, "error");
+        assert_eq!(report.status_message.as_deref(), Some("failed"));
+        assert!(report.finished_at.is_some());
+
+        report.finish_ok();
+        assert_eq!(report.status, "ok");
+        assert_eq!(report.status_message, None);
+        assert!(report.finished_at.is_some());
+    }
+
+    #[test]
+    fn write_report_writes_expected_json() {
+        let output_dir = unique_temp_dir("report");
+        fs::create_dir_all(&output_dir).unwrap();
+        let report = fixed_report();
+
+        let path = write_report(&output_dir, &report).unwrap();
+        assert_eq!(path, output_dir.join("report.json"));
+
+        let written: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        let expected = serde_json::to_value(report).unwrap();
+        assert_eq!(written, expected);
+
+        let _ = fs::remove_file(path);
+        let _ = fs::remove_dir(output_dir);
+    }
+}

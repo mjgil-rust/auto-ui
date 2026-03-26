@@ -191,3 +191,70 @@ fn decode_output(output: Output, rendered: &str, check: bool) -> Result<CommandO
     }
     Ok(CommandOutput { stdout, stderr })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn unique_temp_path(name: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        env::temp_dir().join(format!("auto-ui-{name}-{nanos}-{}", std::process::id()))
+    }
+
+    #[test]
+    fn parse_scenario_file_reads_core_fields() {
+        let path = unique_temp_path("scenario");
+        fs::write(
+            &path,
+            r#"
+target = "rust_chatbot"
+scenario = "debug"
+output_dir = "tmp/example"
+[app]
+provider = "codex"
+"#,
+        )
+        .unwrap();
+
+        let scenario = parse_scenario_file(&path).unwrap();
+        assert_eq!(scenario.target, "rust_chatbot");
+        assert_eq!(scenario.scenario, "debug");
+        assert_eq!(scenario.output_dir.as_deref(), Some("tmp/example"));
+        assert_eq!(
+            scenario
+                .value
+                .get("app")
+                .and_then(|value| value.get("provider"))
+                .and_then(Value::as_str),
+            Some("codex")
+        );
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn parse_scenario_file_requires_string_target() {
+        let path = unique_temp_path("missing-target");
+        fs::write(&path, "scenario = \"debug\"\ntarget = 7\n").unwrap();
+
+        let err = parse_scenario_file(&path).unwrap_err().to_string();
+        assert!(err.contains("missing a string target"));
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn parse_scenario_file_requires_string_scenario() {
+        let path = unique_temp_path("missing-scenario");
+        fs::write(&path, "target = \"rust_chatbot\"\nscenario = false\n").unwrap();
+
+        let err = parse_scenario_file(&path).unwrap_err().to_string();
+        assert!(err.contains("missing a string scenario"));
+
+        let _ = fs::remove_file(path);
+    }
+}

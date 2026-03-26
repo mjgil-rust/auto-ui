@@ -85,6 +85,7 @@ dependencies = [
  "auto-ui-adapter-rust-chatbot",
  "auto-ui-core",
  "clap",
+ "serde_json",
 ]
 
 [[package]]

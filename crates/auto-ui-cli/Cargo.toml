@@ -9,3 +9,4 @@ auto-ui-adapter-gpui = { path = "../auto-ui-adapter-gpui" }
 auto-ui-adapter-rust-chatbot = { path = "../auto-ui-adapter-rust-chatbot" }
 auto-ui-core = { path = "../auto-ui-core" }
 clap.workspace = true
+serde_json.workspace = true

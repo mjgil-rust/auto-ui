@@ -90,6 +90,20 @@ pub fn scenario_names() -> &'static [&'static str] {
     SCENARIOS
 }
 
+pub fn validate_named_scenario(scenario: &str, value: &Value) -> Result<()> {
+    match normalize_name(scenario).as_str() {
+        "scroll_matrix" => {
+            scroll_matrix_config_from_scenario(value.clone(), None)?;
+            Ok(())
+        }
+        "scrollbar_trace" => {
+            scrollbar_trace_config_from_scenario(value.clone(), None)?;
+            Ok(())
+        }
+        other => bail!("Unsupported gpui scenario {other:?}."),
+    }
+}
+
 pub fn run_named_scenario(
     scenario: &str,
     value: Value,

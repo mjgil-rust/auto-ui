@@ -181,6 +181,20 @@ pub fn scenario_names() -> &'static [&'static str] {
     SCENARIOS
 }
 
+pub fn validate_named_scenario(scenario: &str, value: &Value) -> Result<()> {
+    match normalize_name(scenario).as_str() {
+        "debug" => {
+            debug_config_from_scenario(value.clone(), None)?;
+            Ok(())
+        }
+        "header_debug" => {
+            header_config_from_scenario(value.clone(), None)?;
+            Ok(())
+        }
+        other => bail!("Unsupported rust-chatbot scenario {other:?}."),
+    }
+}
+
 pub fn run_named_scenario(
     scenario: &str,
     value: Value,

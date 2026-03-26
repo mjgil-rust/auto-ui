@@ -6,6 +6,8 @@ use auto_ui_adapter_rust_chatbot as rust_chatbot;
 use auto_ui_core::{normalize_name, parse_scenario_file};
 use clap::Args as ClapArgs;
 
+const SUPPORTED_TARGETS: &[&str] = &["rust_chatbot", "gpui_component_testing"];
+
 #[derive(Clone, Debug, ClapArgs)]
 pub struct Args {
     #[arg(long)]
@@ -23,6 +25,7 @@ pub fn run(args: Args) -> Result<()> {
     let target = normalize_name(args.target.as_deref().unwrap_or(&scenario_file.target));
     let scenario = normalize_name(args.scenario.as_deref().unwrap_or(&scenario_file.scenario));
     let output_override = args.output_dir.or(scenario_file.output_dir);
+    validate_selected_scenario(&target, &scenario, &scenario_file.value)?;
 
     let completed = match target.as_str() {
         "rust_chatbot" => {
@@ -31,13 +34,31 @@ pub fn run(args: Args) -> Result<()> {
         "gpui_component_testing" => {
             gpui::run_named_scenario(&scenario, scenario_file.value, output_override)?
         }
-        other => bail!("Unsupported target {other:?}."),
+        other => bail!(
+            "Unsupported target {other:?}. Supported targets: {}.",
+            SUPPORTED_TARGETS.join(", ")
+        ),
     };
 
     println!("\ncompleted:");
     println!("  output_dir: {}", completed.output_dir.display());
     println!("  report: {}", completed.report_path.display());
     Ok(())
+}
+
+fn validate_selected_scenario(
+    target: &str,
+    scenario: &str,
+    value: &serde_json::Value,
+) -> Result<()> {
+    match target {
+        "rust_chatbot" => rust_chatbot::validate_named_scenario(scenario, value),
+        "gpui_component_testing" => gpui::validate_named_scenario(scenario, value),
+        other => bail!(
+            "Unsupported target {other:?}. Supported targets: {}.",
+            SUPPORTED_TARGETS.join(", ")
+        ),
+    }
 }
 
 pub fn print_scenarios(target: Option<&str>) {
@@ -65,5 +86,47 @@ pub fn print_scenarios(target: Option<&str>) {
                 println!("  {scenario}");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use auto_ui_core::repo_root;
+
+    fn validate_example(path: &str) -> Result<()> {
+        let scenario_file = parse_scenario_file(&repo_root().join(path))?;
+        let target = normalize_name(&scenario_file.target);
+        let scenario = normalize_name(&scenario_file.scenario);
+        validate_selected_scenario(&target, &scenario, &scenario_file.value)
+    }
+
+    #[test]
+    fn rust_chatbot_debug_example_validates() {
+        validate_example("examples/rust-chatbot-debug.toml").unwrap();
+    }
+
+    #[test]
+    fn rust_chatbot_header_debug_example_validates() {
+        validate_example("examples/rust-chatbot-header-debug.toml").unwrap();
+    }
+
+    #[test]
+    fn gpui_scroll_matrix_example_validates() {
+        validate_example("examples/gpui-scroll-matrix.toml").unwrap();
+    }
+
+    #[test]
+    fn gpui_scrollbar_trace_example_validates() {
+        validate_example("examples/gpui-scrollbar-trace.toml").unwrap();
+    }
+
+    #[test]
+    fn unsupported_target_error_lists_supported_targets() {
+        let err = validate_selected_scenario("nope", "debug", &serde_json::Value::Null)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("rust_chatbot"));
+        assert!(err.contains("gpui_component_testing"));
     }
 }
