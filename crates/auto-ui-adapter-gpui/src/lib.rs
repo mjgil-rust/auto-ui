@@ -456,6 +456,7 @@ fn run_process_with_optional_capture(
     window_title: Option<&str>,
     screenshot_path: Option<&Path>,
 ) -> Result<()> {
+    let restore_window_id = x11::get_active_window_id()?;
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
     let mut child = command.spawn().with_context(|| "failed to start gpui process".to_string())?;
@@ -469,6 +470,7 @@ fn run_process_with_optional_capture(
                         .and_then(|title| x11::find_window_id(title, Duration::from_secs(2)).ok().flatten())
                 })
             {
+                let _ = x11::background_window(&window_id, restore_window_id.as_deref());
                 let _ = x11::capture_window_screenshot(&window_id, screenshot_path);
             }
         }

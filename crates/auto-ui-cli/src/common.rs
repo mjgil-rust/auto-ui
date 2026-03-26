@@ -659,6 +659,17 @@ pub fn resize_window(window_id: &str, width: u32, height: u32) -> Result<WindowG
     get_window_geometry(window_id)
 }
 
+pub fn prepare_window_for_capture(
+    window_id: &str,
+    width: u32,
+    height: u32,
+    restore_window_id: Option<&str>,
+) -> Result<WindowGeometry> {
+    let geometry = resize_window(window_id, width, height)?;
+    background_window(window_id, restore_window_id)?;
+    Ok(geometry)
+}
+
 pub fn press_key(window_id: &str, key: &str) -> Result<()> {
     require_window(window_id)?;
     let mut cmd = Command::new("xdotool");

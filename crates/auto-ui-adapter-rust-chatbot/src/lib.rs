@@ -555,10 +555,16 @@ pub fn run_header_debug(config: HeaderDebugConfig) -> Result<CompletedRun> {
                 format!("resizing window to width={width} height={}", config.height),
                 Some(&progress_path),
             )?;
-            let geometry = x11::resize_window(&window_id, width, config.height)?;
-            if !config.keep_front {
-                x11::background_window(&window_id, desktop_window_id.as_deref())?;
-            }
+            let geometry = if config.keep_front {
+                x11::resize_window(&window_id, width, config.height)?
+            } else {
+                x11::prepare_window_for_capture(
+                    &window_id,
+                    width,
+                    config.height,
+                    desktop_window_id.as_deref(),
+                )?
+            };
             thread::sleep(seconds(config.settle));
 
             let (new_offset, trace, code_block_traces) = match wait_for_trace_bundle(
@@ -1060,10 +1066,16 @@ fn run_width_session(
             format!("resizing window to width={width} height={}", config.height),
             Some(progress_path),
         )?;
-        geometry = Some(x11::resize_window(&current_window_id, width, config.height)?);
-        if config.launch_if_missing && !config.keep_front {
-            x11::background_window(&current_window_id, desktop_window_id)?;
-        }
+        geometry = Some(if config.launch_if_missing && !config.keep_front {
+            x11::prepare_window_for_capture(
+                &current_window_id,
+                width,
+                config.height,
+                desktop_window_id,
+            )?
+        } else {
+            x11::resize_window(&current_window_id, width, config.height)?
+        });
         thread::sleep(seconds(config.settle));
 
         let (new_log_offset, trace, code_block_traces) = match wait_for_trace_bundle(
