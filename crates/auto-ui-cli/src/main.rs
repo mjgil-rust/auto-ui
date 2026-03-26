@@ -5,7 +5,11 @@ mod run_cmd;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "auto-ui", version, about = "Generic desktop UI automation helpers")]
+#[command(
+    name = "auto-ui",
+    version,
+    about = "Generic desktop UI automation helpers"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,

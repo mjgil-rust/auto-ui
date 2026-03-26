@@ -88,7 +88,10 @@ pub fn find_window_ids_for_pid(pid: i32) -> Result<Vec<String>> {
     Ok(window_ids)
 }
 
-pub fn find_interaction_window_id(title_substring: &str, timeout: Duration) -> Result<Option<String>> {
+pub fn find_interaction_window_id(
+    title_substring: &str,
+    timeout: Duration,
+) -> Result<Option<String>> {
     wait_for_option(timeout, || {
         let ids = find_interaction_window_ids(title_substring)?;
         Ok(ids.last().cloned())
@@ -123,7 +126,9 @@ pub fn wait_for_new_interaction_window_id(
 ) -> Result<Option<String>> {
     wait_for_option(timeout, || {
         let ids = find_interaction_window_ids(title_substring)?;
-        Ok(ids.into_iter().find(|window_id| !before_ids.contains(window_id)))
+        Ok(ids
+            .into_iter()
+            .find(|window_id| !before_ids.contains(window_id)))
     })
 }
 
@@ -134,7 +139,9 @@ pub fn wait_for_new_window_id(
 ) -> Result<Option<String>> {
     wait_for_option(timeout, || {
         let ids = find_window_ids(title_substring)?;
-        Ok(ids.into_iter().find(|window_id| !before_ids.contains(window_id)))
+        Ok(ids
+            .into_iter()
+            .find(|window_id| !before_ids.contains(window_id)))
     })
 }
 
@@ -152,8 +159,12 @@ pub fn get_window_geometry(window_id: &str) -> Result<WindowGeometry> {
         }
     }
     Ok(WindowGeometry {
-        x: *values.get("X").ok_or_else(|| anyhow!("missing X geometry field"))?,
-        y: *values.get("Y").ok_or_else(|| anyhow!("missing Y geometry field"))?,
+        x: *values
+            .get("X")
+            .ok_or_else(|| anyhow!("missing X geometry field"))?,
+        y: *values
+            .get("Y")
+            .ok_or_else(|| anyhow!("missing Y geometry field"))?,
         width: *values
             .get("WIDTH")
             .ok_or_else(|| anyhow!("missing WIDTH geometry field"))?,
@@ -234,6 +245,30 @@ pub fn resize_window(window_id: &str, width: u32, height: u32) -> Result<WindowG
     get_window_geometry(window_id)
 }
 
+pub fn set_window_geometry(window_id: &str, geometry: &WindowGeometry) -> Result<WindowGeometry> {
+    require_window(window_id)?;
+
+    let mut size_cmd = Command::new("xdotool");
+    size_cmd
+        .arg("windowsize")
+        .arg("--sync")
+        .arg(window_id)
+        .arg(geometry.width.max(1).to_string())
+        .arg(geometry.height.max(1).to_string());
+    run_command(&mut size_cmd, true)?;
+
+    let mut move_cmd = Command::new("xdotool");
+    move_cmd
+        .arg("windowmove")
+        .arg("--sync")
+        .arg(window_id)
+        .arg(geometry.x.to_string())
+        .arg(geometry.y.to_string());
+    run_command(&mut move_cmd, true)?;
+
+    get_window_geometry(window_id)
+}
+
 pub fn prepare_window_for_capture(
     window_id: &str,
     width: u32,
@@ -289,7 +324,13 @@ pub fn capture_window_screenshot(window_id: &str, path: &Path) -> Result<()> {
     Ok(())
 }
 
-pub fn crop_metric(image_path: &Path, x: i32, y: i32, width: i32, height: i32) -> Result<VisualMetric> {
+pub fn crop_metric(
+    image_path: &Path,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+) -> Result<VisualMetric> {
     let geometry = format!("{width}x{height}+{x}+{y}");
 
     let mut stddev_cmd = Command::new("convert");

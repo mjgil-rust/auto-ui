@@ -108,6 +108,25 @@ Recommended safeguards:
 - expose opt-in flags for intrusive behavior instead of making it implicit
 - log when the harness had to take foreground control so runs can be audited
 
+## Target Launch Contract
+
+The harness cannot guarantee background-first window creation by itself on X11.
+The window manager decides focus when a new window is first mapped.
+
+To let target apps cooperate with the desktop-coexistence policy, `auto-ui`
+sets `AUTO_UI_LAUNCH_BACKGROUND=1` on launches that should avoid taking
+foreground control.
+
+Contract:
+
+- if `AUTO_UI_LAUNCH_BACKGROUND=1`, the target should create or map its first
+  automation window without requesting focus when the toolkit/backend supports
+  that behavior
+- if the stack cannot honor the request, the target may ignore it and launch
+  normally
+- the harness still lowers the window after map as a fallback, so the env var
+  is a best-effort request rather than a hard guarantee
+
 ## High-Level Architecture
 
 The repo is now a Cargo workspace with the planned split in place.
@@ -370,6 +389,7 @@ window_screenshot = false
 - Read provider metadata from `~/.codex-desktop`, `~/.claude-desktop`, or
   `~/.gemini-desktop`.
 - Launch a session with:
+  - `AUTO_UI_LAUNCH_BACKGROUND=1`
   - `RUST_CHATBOT_AUTO_UI_DEBUG=1`
   - optional `RUST_CHATBOT_START_SESSION_ID`
 - Parse the latest `rust-chatbot.log.*` file for:
@@ -410,6 +430,7 @@ That is exactly the behavior the Rust harness should model directly.
 - Resolve the target repo root.
 - Resolve a prebuilt example binary or a configured launch command.
 - Inject env vars such as:
+  - `AUTO_UI_LAUNCH_BACKGROUND`
   - `BENCH_AUTO_SCROLL`
   - `BENCH_SCROLL_WARMUP_MS`
   - `BENCH_SCROLL_TICK_MS`

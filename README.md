@@ -89,12 +89,24 @@ active workflow.
 - Do not move the mouse pointer unless a scenario explicitly opts in and there
   is no reliable alternative.
 - Do not leave automation windows in the foreground by default. Launch them,
-  attach as needed, then lower them again.
+  resize or attach as needed, then lower them again.
 - Treat `keep_front = true` style behavior as an explicit opt-in.
+- When reusing an existing window, restore its prior geometry after the run
+  when practical.
 - Send keys only to the verified target window, not to the user's currently
   focused app.
 - Avoid switching workspaces, sending global shortcuts, or using the clipboard
   when another mechanism is available.
+
+Target launch contract:
+
+- When `auto-ui` launches a target in background-friendly mode, it sets
+  `AUTO_UI_LAUNCH_BACKGROUND=1`.
+- Target apps that understand this contract should create or map their first
+  automation window without requesting focus when the toolkit/backend supports
+  it.
+- Targets may ignore the request on unsupported stacks. `auto-ui` still lowers
+  the window after map as a fallback.
 
 ## Status
 

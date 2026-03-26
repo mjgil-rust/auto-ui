@@ -6,7 +6,10 @@ use std::time::Duration;
 
 use anyhow::{anyhow, bail, Context, Result};
 use auto_ui_artifacts::{write_report, Report};
-use auto_ui_core::{build_output_dir, expand_path, log_line, normalize_name, repo_root, CompletedRun};
+use auto_ui_core::{
+    build_output_dir, expand_path, log_line, normalize_name, repo_root, request_background_launch,
+    CompletedRun,
+};
 use auto_ui_driver_x11 as x11;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -87,7 +90,11 @@ pub fn scenario_names() -> &'static [&'static str] {
     SCENARIOS
 }
 
-pub fn run_named_scenario(scenario: &str, value: Value, output_override: Option<String>) -> Result<CompletedRun> {
+pub fn run_named_scenario(
+    scenario: &str,
+    value: Value,
+    output_override: Option<String>,
+) -> Result<CompletedRun> {
     match normalize_name(scenario).as_str() {
         "scroll_matrix" => {
             let config = scroll_matrix_config_from_scenario(value, output_override)?;
@@ -108,9 +115,18 @@ pub fn run_scroll_matrix(config: ScrollMatrixConfig) -> Result<CompletedRun> {
     let progress_path = output_dir.join("progress.log");
     let binary = resolve_example_binary(&app_root, &config.example)?;
 
-    log_line(format!("app_root={}", app_root.display()), Some(&progress_path))?;
-    log_line(format!("output_dir={}", output_dir.display()), Some(&progress_path))?;
-    log_line(format!("example_binary={}", binary.display()), Some(&progress_path))?;
+    log_line(
+        format!("app_root={}", app_root.display()),
+        Some(&progress_path),
+    )?;
+    log_line(
+        format!("output_dir={}", output_dir.display()),
+        Some(&progress_path),
+    )?;
+    log_line(
+        format!("example_binary={}", binary.display()),
+        Some(&progress_path),
+    )?;
 
     let mut report = Report::new(TARGET_ID, "scroll_matrix", "startup_driven", &app_root);
     report.add_artifact(
@@ -137,6 +153,7 @@ pub fn run_scroll_matrix(config: ScrollMatrixConfig) -> Result<CompletedRun> {
 
         let mut command = Command::new(&binary);
         command.current_dir(&app_root);
+        request_background_launch(&mut command);
         command.env("BENCH_VARIANT", variant);
         command.env("BENCH_OUTPUT", &csv_path);
         command.env("BENCH_DURATION_MS", duration_ms.to_string());
@@ -217,19 +234,32 @@ pub fn run_scroll_matrix(config: ScrollMatrixConfig) -> Result<CompletedRun> {
     println!("  summary: {}", summary_md.display());
     println!("  report: {}", report_path.display());
 
-    Ok(CompletedRun { output_dir, report_path })
+    Ok(CompletedRun {
+        output_dir,
+        report_path,
+    })
 }
 
 pub fn run_scrollbar_trace(config: ScrollbarTraceConfig) -> Result<CompletedRun> {
     auto_ui_core::ensure_display("gpui-component-testing")?;
     let app_root = resolve_app_root(config.app_root.as_deref())?;
-    let output_dir = build_output_dir(config.output_dir.as_deref(), "auto-ui-gpui-scrollbar-trace")?;
+    let output_dir =
+        build_output_dir(config.output_dir.as_deref(), "auto-ui-gpui-scrollbar-trace")?;
     let progress_path = output_dir.join("progress.log");
     let binary = resolve_example_binary(&app_root, &config.example)?;
 
-    log_line(format!("app_root={}", app_root.display()), Some(&progress_path))?;
-    log_line(format!("output_dir={}", output_dir.display()), Some(&progress_path))?;
-    log_line(format!("example_binary={}", binary.display()), Some(&progress_path))?;
+    log_line(
+        format!("app_root={}", app_root.display()),
+        Some(&progress_path),
+    )?;
+    log_line(
+        format!("output_dir={}", output_dir.display()),
+        Some(&progress_path),
+    )?;
+    log_line(
+        format!("example_binary={}", binary.display()),
+        Some(&progress_path),
+    )?;
 
     let stdout_path = output_dir.join("scrollbar.stdout.log");
     let stderr_path = output_dir.join("scrollbar.stderr.log");
@@ -239,12 +269,22 @@ pub fn run_scrollbar_trace(config: ScrollbarTraceConfig) -> Result<CompletedRun>
 
     let mut command = Command::new(&binary);
     command.current_dir(&app_root);
+    request_background_launch(&mut command);
     command.env("GPUI_COMPONENT_SCROLLBAR_TRACE", "1");
     command.env("SCROLLBAR_DEMO_AUTO_SCROLL", "1");
     command.env("SCROLLBAR_DEMO_DURATION_MS", duration_ms.to_string());
-    command.env("SCROLLBAR_DEMO_SCROLL_WARMUP_MS", config.warmup_ms.to_string());
-    command.env("SCROLLBAR_DEMO_SCROLL_TICK_MS", config.scroll_delay_ms.to_string());
-    command.env("SCROLLBAR_DEMO_SCROLL_STEP_PX", config.scroll_step_px.to_string());
+    command.env(
+        "SCROLLBAR_DEMO_SCROLL_WARMUP_MS",
+        config.warmup_ms.to_string(),
+    );
+    command.env(
+        "SCROLLBAR_DEMO_SCROLL_TICK_MS",
+        config.scroll_delay_ms.to_string(),
+    );
+    command.env(
+        "SCROLLBAR_DEMO_SCROLL_STEP_PX",
+        config.scroll_step_px.to_string(),
+    );
     command.env("SCROLLBAR_DEMO_WINDOW_TITLE", &config.window_title);
 
     run_process_with_optional_capture(
@@ -316,7 +356,10 @@ pub fn run_scrollbar_trace(config: ScrollbarTraceConfig) -> Result<CompletedRun>
     println!("  summary: {}", summary_md.display());
     println!("  report: {}", report_path.display());
 
-    Ok(CompletedRun { output_dir, report_path })
+    Ok(CompletedRun {
+        output_dir,
+        report_path,
+    })
 }
 
 fn resolve_app_root(raw_path: Option<&str>) -> Result<PathBuf> {
@@ -344,7 +387,11 @@ fn resolve_app_root(raw_path: Option<&str>) -> Result<PathBuf> {
 }
 
 fn resolve_example_binary(app_root: &Path, example: &str) -> Result<PathBuf> {
-    let path = app_root.join("target").join("release").join("examples").join(example);
+    let path = app_root
+        .join("target")
+        .join("release")
+        .join("examples")
+        .join(example);
     if path.exists() {
         Ok(path)
     } else {
@@ -355,7 +402,10 @@ fn resolve_example_binary(app_root: &Path, example: &str) -> Result<PathBuf> {
     }
 }
 
-fn scroll_matrix_config_from_scenario(value: Value, output_override: Option<String>) -> Result<ScrollMatrixConfig> {
+fn scroll_matrix_config_from_scenario(
+    value: Value,
+    output_override: Option<String>,
+) -> Result<ScrollMatrixConfig> {
     let scenario: ScrollMatrixScenarioFile = serde_json::from_value(value)?;
     let mut config = ScrollMatrixConfig::default();
     if let Some(app) = scenario.app {
@@ -368,7 +418,9 @@ fn scroll_matrix_config_from_scenario(value: Value, output_override: Option<Stri
         config.warmup_ms = bench.warmup_ms.unwrap_or(config.warmup_ms);
         config.scroll_delay_ms = bench.scroll_delay_ms.unwrap_or(config.scroll_delay_ms);
         config.scroll_step_px = bench.scroll_step_px.unwrap_or(config.scroll_step_px);
-        config.window_title_prefix = bench.window_title_prefix.unwrap_or(config.window_title_prefix);
+        config.window_title_prefix = bench
+            .window_title_prefix
+            .unwrap_or(config.window_title_prefix);
     }
     if let Some(capture) = scenario.capture {
         config.capture_window = capture.capture_window.unwrap_or(config.capture_window);
@@ -378,7 +430,10 @@ fn scroll_matrix_config_from_scenario(value: Value, output_override: Option<Stri
     Ok(config)
 }
 
-fn scrollbar_trace_config_from_scenario(value: Value, output_override: Option<String>) -> Result<ScrollbarTraceConfig> {
+fn scrollbar_trace_config_from_scenario(
+    value: Value,
+    output_override: Option<String>,
+) -> Result<ScrollbarTraceConfig> {
     let scenario: ScrollbarTraceScenarioFile = serde_json::from_value(value)?;
     let mut config = ScrollbarTraceConfig::default();
     if let Some(app) = scenario.app {
@@ -459,16 +514,23 @@ fn run_process_with_optional_capture(
     let restore_window_id = x11::get_active_window_id()?;
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
-    let mut child = command.spawn().with_context(|| "failed to start gpui process".to_string())?;
+    let mut child = command
+        .spawn()
+        .with_context(|| "failed to start gpui process".to_string())?;
 
     if capture_window {
         thread::sleep(Duration::from_millis(settle_ms));
         if let Some(screenshot_path) = screenshot_path {
-            if let Some(window_id) = x11::find_window_id_for_pid(child.id() as i32, Duration::from_secs(2))?
-                .or_else(|| {
-                    window_title
-                        .and_then(|title| x11::find_window_id(title, Duration::from_secs(2)).ok().flatten())
-                })
+            if let Some(window_id) =
+                x11::find_window_id_for_pid(child.id() as i32, Duration::from_secs(2))?.or_else(
+                    || {
+                        window_title.and_then(|title| {
+                            x11::find_window_id(title, Duration::from_secs(2))
+                                .ok()
+                                .flatten()
+                        })
+                    },
+                )
             {
                 let _ = x11::background_window(&window_id, restore_window_id.as_deref());
                 let _ = x11::capture_window_screenshot(&window_id, screenshot_path);
@@ -499,7 +561,8 @@ struct ScrollMatrixSummary {
 }
 
 fn summarize_scroll_matrix_csv(path: &Path, warmup_ms: u64) -> Result<ScrollMatrixSummary> {
-    let text = fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
+    let text =
+        fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
     let mut frame_values = Vec::new();
     for (index, line) in text.lines().enumerate() {
         if index == 0 || line.trim().is_empty() {
@@ -567,13 +630,17 @@ struct ScrollbarSummary {
 }
 
 fn summarize_scrollbar_stderr(path: &Path) -> Result<ScrollbarSummary> {
-    let text = fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
+    let text =
+        fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
     let trace_lines: Vec<_> = text
         .lines()
         .filter(|line| line.starts_with("[scrollbar] prepaint"))
         .map(ToOwned::to_owned)
         .collect();
-    let zero_states = trace_lines.iter().filter(|line| line.contains("states=0")).count();
+    let zero_states = trace_lines
+        .iter()
+        .filter(|line| line.contains("states=0"))
+        .count();
     let nonzero_states = trace_lines
         .iter()
         .filter(|line| line.contains("states=") && !line.contains("states=0"))
@@ -586,21 +653,33 @@ fn summarize_scrollbar_stderr(path: &Path) -> Result<ScrollbarSummary> {
     })
 }
 
-fn write_scrollbar_summary(path: &Path, summary: &ScrollbarSummary, config: &ScrollbarTraceConfig) -> Result<()> {
+fn write_scrollbar_summary(
+    path: &Path,
+    summary: &ScrollbarSummary,
+    config: &ScrollbarTraceConfig,
+) -> Result<()> {
     let mut out = String::new();
     out.push_str("# Scrollbar Trace Summary\n\n");
     out.push_str(&format!(
         "Run duration: `{}ms` after `{}ms` warmup. Tick delay: `{}ms`. Step: `{}px`.\n\n",
         config.run_ms, config.warmup_ms, config.scroll_delay_ms, config.scroll_step_px
     ));
-    out.push_str(&format!("- Total scrollbar trace lines: `{}`\n", summary.total_lines));
+    out.push_str(&format!(
+        "- Total scrollbar trace lines: `{}`\n",
+        summary.total_lines
+    ));
     out.push_str(&format!("- `states=0` lines: `{}`\n", summary.zero_states));
-    out.push_str(&format!("- `states>0` lines: `{}`\n", summary.nonzero_states));
+    out.push_str(&format!(
+        "- `states>0` lines: `{}`\n",
+        summary.nonzero_states
+    ));
     if let Some(last_line) = &summary.last_line {
         out.push_str(&format!("- Last trace line: `{}`\n", last_line));
     }
     out.push_str("\nInterpretation:\n\n");
     out.push_str("- If `states>0`, the scrollbar logic believes a thumb should be painted.\n");
-    out.push_str("- If `states=0` for the whole run, the content likely never overflowed the viewport.\n");
+    out.push_str(
+        "- If `states=0` for the whole run, the content likely never overflowed the viewport.\n",
+    );
     fs::write(path, out).with_context(|| format!("failed to write {}", path.display()))
 }

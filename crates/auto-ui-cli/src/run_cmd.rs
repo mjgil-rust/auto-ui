@@ -25,8 +25,12 @@ pub fn run(args: Args) -> Result<()> {
     let output_override = args.output_dir.or(scenario_file.output_dir);
 
     let completed = match target.as_str() {
-        "rust_chatbot" => rust_chatbot::run_named_scenario(&scenario, scenario_file.value, output_override)?,
-        "gpui_component_testing" => gpui::run_named_scenario(&scenario, scenario_file.value, output_override)?,
+        "rust_chatbot" => {
+            rust_chatbot::run_named_scenario(&scenario, scenario_file.value, output_override)?
+        }
+        "gpui_component_testing" => {
+            gpui::run_named_scenario(&scenario, scenario_file.value, output_override)?
+        }
         other => bail!("Unsupported target {other:?}."),
     };
 

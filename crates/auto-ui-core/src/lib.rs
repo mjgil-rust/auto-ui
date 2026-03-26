@@ -11,6 +11,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 pub type TraceFields = BTreeMap<String, String>;
+pub const AUTO_UI_LAUNCH_BACKGROUND_ENV: &str = "AUTO_UI_LAUNCH_BACKGROUND";
 
 pub struct CommandOutput {
     pub stdout: String,
@@ -45,6 +46,10 @@ pub fn run_command(command: &mut Command, check: bool) -> Result<CommandOutput> 
         .output()
         .with_context(|| format!("failed to run {rendered}"))?;
     decode_output(output, &rendered, check)
+}
+
+pub fn request_background_launch(command: &mut Command) {
+    command.env(AUTO_UI_LAUNCH_BACKGROUND_ENV, "1");
 }
 
 pub fn render_command(command: &Command) -> String {
@@ -112,7 +117,10 @@ pub fn parse_widths(raw: &str) -> Result<Vec<u32>> {
     raw.split(',')
         .map(str::trim)
         .filter(|part| !part.is_empty())
-        .map(|part| part.parse::<u32>().with_context(|| format!("invalid width {part}")))
+        .map(|part| {
+            part.parse::<u32>()
+                .with_context(|| format!("invalid width {part}"))
+        })
         .collect()
 }
 
@@ -139,7 +147,8 @@ pub fn write_json_file(path: &Path, value: &impl Serialize) -> Result<()> {
 }
 
 pub fn parse_scenario_file(path: &Path) -> Result<ScenarioFile> {
-    let text = fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
+    let text =
+        fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
     let toml_value: toml::Value =
         toml::from_str(&text).with_context(|| format!("failed to parse {}", path.display()))?;
     let json_value = serde_json::to_value(toml_value)?;

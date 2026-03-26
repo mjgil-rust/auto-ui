@@ -10,8 +10,8 @@ use std::time::{Duration, Instant};
 use anyhow::{anyhow, bail, Context, Result};
 use auto_ui_artifacts::{write_report, Report};
 use auto_ui_core::{
-    build_output_dir, expand_path, home_dir, log_line, normalize_name, parse_widths, repo_root, run_command,
-    CompletedRun, TraceFields,
+    build_output_dir, expand_path, home_dir, log_line, normalize_name, parse_widths, repo_root,
+    request_background_launch, run_command, CompletedRun, TraceFields,
 };
 use auto_ui_driver_x11 as x11;
 use clap::ValueEnum;
@@ -181,7 +181,11 @@ pub fn scenario_names() -> &'static [&'static str] {
     SCENARIOS
 }
 
-pub fn run_named_scenario(scenario: &str, value: Value, output_override: Option<String>) -> Result<CompletedRun> {
+pub fn run_named_scenario(
+    scenario: &str,
+    value: Value,
+    output_override: Option<String>,
+) -> Result<CompletedRun> {
     match normalize_name(scenario).as_str() {
         "debug" => {
             let config = debug_config_from_scenario(value, output_override)?;
@@ -223,9 +227,18 @@ pub fn run_debug(config: DebugConfig) -> Result<CompletedRun> {
     let log_path = newest_trace_log()?;
     let mut log_offset = fs::metadata(&log_path)?.len();
 
-    log_line(format!("app_root={}", app_root.display()), Some(&progress_path))?;
-    log_line(format!("output_dir={}", output_dir.display()), Some(&progress_path))?;
-    log_line(format!("trace_log={}", log_path.display()), Some(&progress_path))?;
+    log_line(
+        format!("app_root={}", app_root.display()),
+        Some(&progress_path),
+    )?;
+    log_line(
+        format!("output_dir={}", output_dir.display()),
+        Some(&progress_path),
+    )?;
+    log_line(
+        format!("trace_log={}", log_path.display()),
+        Some(&progress_path),
+    )?;
     log_line(
         format!(
             "desktop_window_id={}",
@@ -237,13 +250,17 @@ pub fn run_debug(config: DebugConfig) -> Result<CompletedRun> {
     let per_session_launch_mode = config.launch_if_missing && config.session_id.is_none();
     let mut window_id: Option<String> = None;
     let mut interaction_window_id: Option<String> = None;
+    let mut restore_window_geometry: Option<(String, x11::WindowGeometry)> = None;
 
     if !per_session_launch_mode {
         if config.launch_if_missing {
             let existing_pids = list_chatbot_pids(&app_root)?;
-            let existing_window_ids: HashSet<_> = x11::find_window_ids(&title)?.into_iter().collect();
+            let existing_window_ids: HashSet<_> =
+                x11::find_window_ids(&title)?.into_iter().collect();
             let existing_interaction_window_ids: HashSet<_> =
-                x11::find_interaction_window_ids(&title)?.into_iter().collect();
+                x11::find_interaction_window_ids(&title)?
+                    .into_iter()
+                    .collect();
             log_line(
                 format!("launching fresh {title} with RUST_CHATBOT_AUTO_UI_DEBUG=1"),
                 Some(&progress_path),
@@ -254,21 +271,27 @@ pub fn run_debug(config: DebugConfig) -> Result<CompletedRun> {
                 config.instance,
                 config.session_id.as_deref(),
             )?;
-            let launched_pid = wait_for_new_pid(
-                &app_root,
-                &existing_pids,
-                seconds(config.window_timeout),
-            )?;
+            let launched_pid =
+                wait_for_new_pid(&app_root, &existing_pids, seconds(config.window_timeout))?;
             if let Some(launched_pid) = launched_pid {
-                log_line(format!("detected launched_pid={launched_pid}"), Some(&progress_path))?;
-                window_id = x11::find_window_id_for_pid(launched_pid, seconds(config.window_timeout))?;
-                interaction_window_id =
-                    x11::find_interaction_window_id_for_pid(launched_pid, seconds(config.window_timeout))?;
+                log_line(
+                    format!("detected launched_pid={launched_pid}"),
+                    Some(&progress_path),
+                )?;
+                window_id =
+                    x11::find_window_id_for_pid(launched_pid, seconds(config.window_timeout))?;
+                interaction_window_id = x11::find_interaction_window_id_for_pid(
+                    launched_pid,
+                    seconds(config.window_timeout),
+                )?;
             }
 
             if window_id.is_none() {
-                window_id =
-                    x11::wait_for_new_window_id(&title, &existing_window_ids, seconds(config.window_timeout))?;
+                window_id = x11::wait_for_new_window_id(
+                    &title,
+                    &existing_window_ids,
+                    seconds(config.window_timeout),
+                )?;
             }
             let Some(existing_window_id) = window_id.clone() else {
                 bail!("Could not find a new window matching {title:?} after launch.");
@@ -290,15 +313,32 @@ pub fn run_debug(config: DebugConfig) -> Result<CompletedRun> {
                     "No window matching {title:?} was found. Re-run without --no-launch to let the tool start one."
                 );
             }
-            interaction_window_id = x11::find_interaction_window_id(&title, seconds(config.window_timeout))?;
+            interaction_window_id =
+                x11::find_interaction_window_id(&title, seconds(config.window_timeout))?;
         }
 
         if interaction_window_id.is_none() {
             interaction_window_id = window_id.clone();
         }
+        if !config.launch_if_missing {
+            if let Some(existing_window_id) = window_id.as_deref() {
+                let geometry = x11::get_window_geometry(existing_window_id)?;
+                log_line(
+                    format!(
+                        "captured original geometry window_id={existing_window_id} x={} y={} width={} height={}",
+                        geometry.x, geometry.y, geometry.width, geometry.height
+                    ),
+                    Some(&progress_path),
+                )?;
+                restore_window_geometry = Some((existing_window_id.to_string(), geometry));
+            }
+        }
 
         log_line(
-            format!("using window_id={}", window_id.as_deref().unwrap_or("<none>")),
+            format!(
+                "using window_id={}",
+                window_id.as_deref().unwrap_or("<none>")
+            ),
             Some(&progress_path),
         )?;
         log_line(
@@ -324,127 +364,157 @@ pub fn run_debug(config: DebugConfig) -> Result<CompletedRun> {
         Some("rust-chatbot trace log".to_string()),
         Value::Null,
     );
+    let result = (|| -> Result<CompletedRun> {
+        for width in &widths {
+            let mut session_entries = Vec::new();
 
-    for width in &widths {
-        let mut session_entries = Vec::new();
-
-        for session in &sessions {
-            match run_width_session(
-                &config,
-                &app_root,
-                &title,
-                &log_path,
-                &progress_path,
-                desktop_window_id.as_deref(),
-                per_session_launch_mode,
-                &window_id,
-                interaction_window_id.as_deref(),
-                *width,
-                session,
-                &mut log_offset,
-                &output_dir,
-                &mut report,
-            ) {
-                Ok(entry) => session_entries.push(entry),
-                Err(err) => {
-                    log_line(
-                        format!("trace timeout for session={}: {err}", session.name),
-                        Some(&progress_path),
-                    )?;
-                    session_entries.push(json!({
-                        "session_id": session.session_id,
-                        "session_name": session.name,
-                        "error": format!(
-                            "{err}. If you attached to an already-open window, it was probably not started with RUST_CHATBOT_AUTO_UI_DEBUG=1."
-                        ),
-                    }));
-                }
-            }
-        }
-
-        report_sessions.push(json!({
-            "requested_width": width,
-            "window_geometry": Value::Null,
-            "sessions": session_entries,
-        }));
-    }
-
-    report.set_details(json!({
-        "provider": config.provider.as_str(),
-        "instance": config.instance,
-        "window_id": window_id,
-        "title_substring": title,
-        "widths": widths,
-        "height": config.height,
-        "sessions": report_sessions,
-        "output_dir": output_dir,
-        "trace_log": log_path,
-    }));
-    report.finish_ok();
-    let report_path = write_report(&output_dir, &report)?;
-
-    println!("wrote {}", report_path.display());
-    if let Some(width_entries) = report.details.get("sessions").and_then(Value::as_array) {
-        for width_entry in width_entries {
-            println!(
-                "\nwidth {}:",
-                width_entry
-                    .get("requested_width")
-                    .and_then(Value::as_u64)
-                    .unwrap_or_default()
-            );
-            if let Some(entries) = width_entry.get("sessions").and_then(Value::as_array) {
-                for entry in entries {
-                    if let Some(error) = entry.get("error").and_then(Value::as_str) {
-                        println!(
-                            "  {}: ERROR {}",
-                            entry.get("session_name").and_then(Value::as_str).unwrap_or("<unknown>"),
-                            error
-                        );
-                        continue;
+            for session in &sessions {
+                match run_width_session(
+                    &config,
+                    &app_root,
+                    &title,
+                    &log_path,
+                    &progress_path,
+                    desktop_window_id.as_deref(),
+                    per_session_launch_mode,
+                    &window_id,
+                    interaction_window_id.as_deref(),
+                    *width,
+                    session,
+                    &mut log_offset,
+                    &output_dir,
+                    &mut report,
+                ) {
+                    Ok(entry) => session_entries.push(entry),
+                    Err(err) => {
+                        log_line(
+                            format!("trace timeout for session={}: {err}", session.name),
+                            Some(&progress_path),
+                        )?;
+                        session_entries.push(json!({
+                            "session_id": session.session_id,
+                            "session_name": session.name,
+                            "error": format!(
+                                "{err}. If you attached to an already-open window, it was probably not started with RUST_CHATBOT_AUTO_UI_DEBUG=1."
+                            ),
+                        }));
                     }
-                    let trace = entry.get("trace").unwrap_or(&Value::Null);
-                    let overflow = trace
-                        .get("max_rendered_overflow")
-                        .and_then(Value::as_str)
-                        .unwrap_or("n/a");
-                    let text_ok = if entry
-                        .get("text_visible_heuristic")
-                        .and_then(Value::as_bool)
-                        .unwrap_or(false)
-                    {
-                        "yes"
-                    } else {
-                        "no"
-                    };
-                    let area_width = trace
-                        .get("message_area_available_width")
-                        .and_then(Value::as_str)
-                        .unwrap_or("n/a");
-                    let code_block_count = entry
-                        .get("code_block_traces")
-                        .and_then(Value::as_array)
-                        .map(|items| items.len())
-                        .unwrap_or(0);
-                    println!(
-                        "  {}: area_width={} overflow={} code_blocks={} text_visible={}",
-                        entry.get("session_name").and_then(Value::as_str).unwrap_or("<unknown>"),
-                        area_width,
-                        overflow,
-                        code_block_count,
-                        text_ok
-                    );
+                }
+            }
+
+            report_sessions.push(json!({
+                "requested_width": width,
+                "window_geometry": Value::Null,
+                "sessions": session_entries,
+            }));
+        }
+
+        report.set_details(json!({
+            "provider": config.provider.as_str(),
+            "instance": config.instance,
+            "window_id": window_id,
+            "title_substring": title,
+            "widths": widths,
+            "height": config.height,
+            "sessions": report_sessions,
+            "output_dir": output_dir,
+            "trace_log": log_path,
+        }));
+        report.finish_ok();
+        let report_path = write_report(&output_dir, &report)?;
+
+        println!("wrote {}", report_path.display());
+        if let Some(width_entries) = report.details.get("sessions").and_then(Value::as_array) {
+            for width_entry in width_entries {
+                println!(
+                    "\nwidth {}:",
+                    width_entry
+                        .get("requested_width")
+                        .and_then(Value::as_u64)
+                        .unwrap_or_default()
+                );
+                if let Some(entries) = width_entry.get("sessions").and_then(Value::as_array) {
+                    for entry in entries {
+                        if let Some(error) = entry.get("error").and_then(Value::as_str) {
+                            println!(
+                                "  {}: ERROR {}",
+                                entry
+                                    .get("session_name")
+                                    .and_then(Value::as_str)
+                                    .unwrap_or("<unknown>"),
+                                error
+                            );
+                            continue;
+                        }
+                        let trace = entry.get("trace").unwrap_or(&Value::Null);
+                        let overflow = trace
+                            .get("max_rendered_overflow")
+                            .and_then(Value::as_str)
+                            .unwrap_or("n/a");
+                        let text_ok = if entry
+                            .get("text_visible_heuristic")
+                            .and_then(Value::as_bool)
+                            .unwrap_or(false)
+                        {
+                            "yes"
+                        } else {
+                            "no"
+                        };
+                        let area_width = trace
+                            .get("message_area_available_width")
+                            .and_then(Value::as_str)
+                            .unwrap_or("n/a");
+                        let code_block_count = entry
+                            .get("code_block_traces")
+                            .and_then(Value::as_array)
+                            .map(|items| items.len())
+                            .unwrap_or(0);
+                        println!(
+                            "  {}: area_width={} overflow={} code_blocks={} text_visible={}",
+                            entry
+                                .get("session_name")
+                                .and_then(Value::as_str)
+                                .unwrap_or("<unknown>"),
+                            area_width,
+                            overflow,
+                            code_block_count,
+                            text_ok
+                        );
+                    }
                 }
             }
         }
+
+        println!("\nlogs:");
+        println!("  progress: {}", progress_path.display());
+        println!("  trace: {}", log_path.display());
+        println!("  report: {}", report_path.display());
+
+        Ok(CompletedRun {
+            output_dir,
+            report_path,
+        })
+    })();
+
+    if let Some((existing_window_id, geometry)) = restore_window_geometry {
+        let restore_result = restore_reused_window(
+            &existing_window_id,
+            &geometry,
+            config.keep_front,
+            desktop_window_id.as_deref(),
+            Some(&progress_path),
+        );
+        if result.is_ok() {
+            restore_result?;
+        } else if let Err(err) = restore_result {
+            let _ = log_line(
+                format!("warning: failed to restore window_id={existing_window_id}: {err:#}"),
+                Some(&progress_path),
+            );
+        }
     }
 
-    println!("\nlogs:");
-    println!("  progress: {}", progress_path.display());
-    println!("  trace: {}", log_path.display());
-    println!("  report: {}", report_path.display());
-
-    Ok(CompletedRun { output_dir, report_path })
+    result
 }
 
 pub fn run_header_debug(config: HeaderDebugConfig) -> Result<CompletedRun> {
@@ -470,9 +540,18 @@ pub fn run_header_debug(config: HeaderDebugConfig) -> Result<CompletedRun> {
     let log_path = newest_trace_log()?;
     let startup_offset = fs::metadata(&log_path)?.len();
 
-    log_line(format!("app_root={}", app_root.display()), Some(&progress_path))?;
-    log_line(format!("output_dir={}", output_dir.display()), Some(&progress_path))?;
-    log_line(format!("trace_log={}", log_path.display()), Some(&progress_path))?;
+    log_line(
+        format!("app_root={}", app_root.display()),
+        Some(&progress_path),
+    )?;
+    log_line(
+        format!("output_dir={}", output_dir.display()),
+        Some(&progress_path),
+    )?;
+    log_line(
+        format!("trace_log={}", log_path.display()),
+        Some(&progress_path),
+    )?;
     log_line(
         format!(
             "desktop_window_id={}",
@@ -480,8 +559,14 @@ pub fn run_header_debug(config: HeaderDebugConfig) -> Result<CompletedRun> {
         ),
         Some(&progress_path),
     )?;
-    log_line(format!("session_id={}", session.session_id), Some(&progress_path))?;
-    log_line(format!("session_name={}", session.name), Some(&progress_path))?;
+    log_line(
+        format!("session_id={}", session.session_id),
+        Some(&progress_path),
+    )?;
+    log_line(
+        format!("session_name={}", session.name),
+        Some(&progress_path),
+    )?;
     log_line(
         format!(
             "provider_session_id={}",
@@ -580,7 +665,11 @@ pub fn run_header_debug(config: HeaderDebugConfig) -> Result<CompletedRun> {
                         format!("resize produced no new ui trace for width={width}; reusing startup trace"),
                         Some(&progress_path),
                     )?;
-                    (current_offset, startup_trace.clone(), startup_code_blocks.clone())
+                    (
+                        current_offset,
+                        startup_trace.clone(),
+                        startup_code_blocks.clone(),
+                    )
                 }
             };
             current_offset = new_offset;
@@ -613,7 +702,14 @@ pub fn run_header_debug(config: HeaderDebugConfig) -> Result<CompletedRun> {
             x11::capture_window_screenshot(&window_id, &screenshot_path)?;
             let (screenshot_width, screenshot_height) = x11::image_size(&screenshot_path)?;
             let top_strip_height = clamp(config.header_height, 1, screenshot_height);
-            crop_image(&screenshot_path, &top_strip_path, 0, 0, screenshot_width, top_strip_height)?;
+            crop_image(
+                &screenshot_path,
+                &top_strip_path,
+                0,
+                0,
+                screenshot_width,
+                top_strip_height,
+            )?;
 
             let focus_crop = approximate_header_focus_crop(
                 &trace,
@@ -632,7 +728,8 @@ pub fn run_header_debug(config: HeaderDebugConfig) -> Result<CompletedRun> {
             )?;
             enhance_image(&focus_path, &focus_enhanced_path)?;
 
-            let top_strip_metric = x11::crop_metric(&screenshot_path, 0, 0, screenshot_width, top_strip_height)?;
+            let top_strip_metric =
+                x11::crop_metric(&screenshot_path, 0, 0, screenshot_width, top_strip_height)?;
             let focus_metric = x11::crop_metric(
                 &screenshot_path,
                 focus_crop.x,
@@ -740,8 +837,14 @@ pub fn run_header_debug(config: HeaderDebugConfig) -> Result<CompletedRun> {
             for entry in entries {
                 println!(
                     "  width {}: window={} header={} enhanced={}",
-                    entry.get("requested_width").and_then(Value::as_u64).unwrap_or_default(),
-                    entry.get("screenshot").and_then(Value::as_str).unwrap_or("<none>"),
+                    entry
+                        .get("requested_width")
+                        .and_then(Value::as_u64)
+                        .unwrap_or_default(),
+                    entry
+                        .get("screenshot")
+                        .and_then(Value::as_str)
+                        .unwrap_or("<none>"),
                     entry
                         .get("header_focus")
                         .and_then(|value| value.get("path"))
@@ -756,7 +859,10 @@ pub fn run_header_debug(config: HeaderDebugConfig) -> Result<CompletedRun> {
             }
         }
 
-        Ok(CompletedRun { output_dir, report_path })
+        Ok(CompletedRun {
+            output_dir,
+            report_path,
+        })
     })();
 
     if let Some(launched_pid) = launched_pid {
@@ -767,7 +873,10 @@ pub fn run_header_debug(config: HeaderDebugConfig) -> Result<CompletedRun> {
     result
 }
 
-fn debug_config_from_scenario(value: Value, output_override: Option<String>) -> Result<DebugConfig> {
+fn debug_config_from_scenario(
+    value: Value,
+    output_override: Option<String>,
+) -> Result<DebugConfig> {
     let scenario: DebugScenarioFile = serde_json::from_value(value)?;
     let mut config = DebugConfig::default();
     if let Some(app) = scenario.app {
@@ -780,7 +889,11 @@ fn debug_config_from_scenario(value: Value, output_override: Option<String>) -> 
     }
     if let Some(window) = scenario.window {
         if let Some(widths) = window.widths {
-            config.widths = widths.into_iter().map(|value| value.to_string()).collect::<Vec<_>>().join(",");
+            config.widths = widths
+                .into_iter()
+                .map(|value| value.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
         }
         config.height = window.height.unwrap_or(config.height);
         config.keep_front = window.keep_front.unwrap_or(config.keep_front);
@@ -795,7 +908,10 @@ fn debug_config_from_scenario(value: Value, output_override: Option<String>) -> 
     Ok(config)
 }
 
-fn header_config_from_scenario(value: Value, output_override: Option<String>) -> Result<HeaderDebugConfig> {
+fn header_config_from_scenario(
+    value: Value,
+    output_override: Option<String>,
+) -> Result<HeaderDebugConfig> {
     let scenario: HeaderScenarioFile = serde_json::from_value(value)?;
     let mut config = HeaderDebugConfig::default();
     if let Some(app) = scenario.app {
@@ -808,7 +924,11 @@ fn header_config_from_scenario(value: Value, output_override: Option<String>) ->
     }
     if let Some(window) = scenario.window {
         if let Some(widths) = window.widths {
-            config.widths = widths.into_iter().map(|value| value.to_string()).collect::<Vec<_>>().join(",");
+            config.widths = widths
+                .into_iter()
+                .map(|value| value.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
         }
         config.height = window.height.unwrap_or(config.height);
         config.keep_front = window.keep_front.unwrap_or(config.keep_front);
@@ -905,7 +1025,11 @@ fn resolve_session(
             .get("updated_at")
             .and_then(Value::as_str)
             .unwrap_or_default()
-            .cmp(left.get("updated_at").and_then(Value::as_str).unwrap_or_default())
+            .cmp(
+                left.get("updated_at")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default(),
+            )
     });
 
     if let Some(session_name) = session_name {
@@ -918,14 +1042,22 @@ fn resolve_session(
                 return load_session_details(provider, session_id);
             }
         }
-        bail!("Session named {session_name:?} was not found for provider {}.", provider.as_str());
+        bail!(
+            "Session named {session_name:?} was not found for provider {}.",
+            provider.as_str()
+        );
     }
 
     for raw in &sessions {
         if !include_hidden && raw.get("hidden").and_then(Value::as_bool).unwrap_or(false) {
             continue;
         }
-        if raw.get("message_count").and_then(Value::as_i64).unwrap_or(0) > 0 {
+        if raw
+            .get("message_count")
+            .and_then(Value::as_i64)
+            .unwrap_or(0)
+            > 0
+        {
             let session_id = raw
                 .get("id")
                 .and_then(Value::as_str)
@@ -976,7 +1108,10 @@ fn load_session_details(provider: Provider, session_id: &str) -> Result<SessionD
             .get(provider.provider_session_field())
             .and_then(Value::as_str)
             .map(ToOwned::to_owned),
-        launched_from: raw.get("launched_from").and_then(Value::as_str).map(ToOwned::to_owned),
+        launched_from: raw
+            .get("launched_from")
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned),
     })
 }
 
@@ -1053,8 +1188,8 @@ fn run_width_session(
                 ),
                 Some(progress_path),
             )?;
-            let interaction_window_id =
-                interaction_window_id.ok_or_else(|| anyhow!("No interaction window is available for selection."))?;
+            let interaction_window_id = interaction_window_id
+                .ok_or_else(|| anyhow!("No interaction window is available for selection."))?;
             x11::select_session(interaction_window_id, &session.name)?;
             thread::sleep(seconds(config.settle));
         }
@@ -1066,7 +1201,7 @@ fn run_width_session(
             format!("resizing window to width={width} height={}", config.height),
             Some(progress_path),
         )?;
-        geometry = Some(if config.launch_if_missing && !config.keep_front {
+        geometry = Some(if !config.keep_front {
             x11::prepare_window_for_capture(
                 &current_window_id,
                 width,
@@ -1095,9 +1230,16 @@ fn run_width_session(
                         ),
                         Some(progress_path),
                     )?;
-                    (current_log_offset, startup_trace, startup_code_block_traces.clone())
+                    (
+                        current_log_offset,
+                        startup_trace,
+                        startup_code_block_traces.clone(),
+                    )
                 } else {
-                    bail!("No ui_auto_debug trace observed for session {}", session.session_id);
+                    bail!(
+                        "No ui_auto_debug trace observed for session {}",
+                        session.session_id
+                    );
                 }
             }
         };
@@ -1110,7 +1252,10 @@ fn run_width_session(
             &session.session_id[..8]
         ));
         log_line(
-            format!("capturing screenshot={}", screenshot_path.file_name().unwrap().to_string_lossy()),
+            format!(
+                "capturing screenshot={}",
+                screenshot_path.file_name().unwrap().to_string_lossy()
+            ),
             Some(progress_path),
         )?;
         x11::capture_window_screenshot(&current_window_id, &screenshot_path)?;
@@ -1156,8 +1301,14 @@ fn run_width_session(
         log_line(
             format!(
                 "captured area_width={} overflow={} code_blocks={} text_visible={}",
-                trace.get("message_area_available_width").map(String::as_str).unwrap_or("n/a"),
-                trace.get("max_rendered_overflow").map(String::as_str).unwrap_or("n/a"),
+                trace
+                    .get("message_area_available_width")
+                    .map(String::as_str)
+                    .unwrap_or("n/a"),
+                trace
+                    .get("max_rendered_overflow")
+                    .map(String::as_str)
+                    .unwrap_or("n/a"),
                 code_block_traces.len(),
                 x11::heuristic_text_visible(&metric)
             ),
@@ -1242,13 +1393,18 @@ fn rust_chatbot_log_dir() -> Result<PathBuf> {
     if let Ok(path) = std::env::var("XDG_STATE_HOME") {
         return Ok(PathBuf::from(path).join("rust-chatbot"));
     }
-    Ok(home_dir()?.join(".local").join("state").join("rust-chatbot"))
+    Ok(home_dir()?
+        .join(".local")
+        .join("state")
+        .join("rust-chatbot"))
 }
 
 fn newest_trace_log() -> Result<PathBuf> {
     let log_dir = rust_chatbot_log_dir()?;
     let mut candidates = Vec::new();
-    for entry in fs::read_dir(&log_dir).with_context(|| format!("failed to read {}", log_dir.display()))? {
+    for entry in
+        fs::read_dir(&log_dir).with_context(|| format!("failed to read {}", log_dir.display()))?
+    {
         let entry = entry?;
         let path = entry.path();
         if path
@@ -1276,7 +1432,12 @@ fn read_sessions_metadata(provider: Provider) -> Result<Map<String, Value>> {
         .get("sessions")
         .and_then(Value::as_object)
         .cloned()
-        .ok_or_else(|| anyhow!("{} does not contain a sessions object", metadata_path.display()))
+        .ok_or_else(|| {
+            anyhow!(
+                "{} does not contain a sessions object",
+                metadata_path.display()
+            )
+        })
 }
 
 fn load_sessions(
@@ -1340,7 +1501,10 @@ fn load_sessions(
             }
         }
         if !missing.is_empty() {
-            bail!("Default auto-ui sessions were not found: {}", missing.join(", "));
+            bail!(
+                "Default auto-ui sessions were not found: {}",
+                missing.join(", ")
+            );
         }
         return Ok(ordered);
     }
@@ -1352,9 +1516,12 @@ fn load_sessions(
 
 fn load_session_by_id(provider: Provider, session_id: &str) -> Result<SessionEntry> {
     let sessions_map = read_sessions_metadata(provider)?;
-    let raw = sessions_map
-        .get(session_id)
-        .ok_or_else(|| anyhow!("Session {session_id:?} was not found for provider {:?}.", provider))?;
+    let raw = sessions_map.get(session_id).ok_or_else(|| {
+        anyhow!(
+            "Session {session_id:?} was not found for provider {:?}.",
+            provider
+        )
+    })?;
     let id = raw
         .get("id")
         .and_then(Value::as_str)
@@ -1429,6 +1596,7 @@ fn launch_window(
         cmd.arg("--instance").arg(instance.to_string());
     }
     cmd.env("RUST_CHATBOT_AUTO_UI_DEBUG", "1");
+    request_background_launch(&mut cmd);
     if let Some(session_id) = start_session_id {
         cmd.env("RUST_CHATBOT_START_SESSION_ID", session_id);
     }
@@ -1442,7 +1610,11 @@ fn launch_window(
     Ok(())
 }
 
-fn wait_for_new_pid(app_root: &Path, before_pids: &HashSet<i32>, timeout: Duration) -> Result<Option<i32>> {
+fn wait_for_new_pid(
+    app_root: &Path,
+    before_pids: &HashSet<i32>,
+    timeout: Duration,
+) -> Result<Option<i32>> {
     let deadline = Instant::now() + timeout;
     while Instant::now() < deadline {
         let current = list_chatbot_pids(app_root)?;
@@ -1488,15 +1660,24 @@ fn launch_targeted_session_window(
     let existing_pids = list_chatbot_pids(app_root)?;
     let existing_window_ids: HashSet<_> = x11::find_window_ids(title)?.into_iter().collect();
     log_line(
-        format!("launching fresh {title} with RUST_CHATBOT_AUTO_UI_DEBUG=1 session_id={session_id}"),
+        format!(
+            "launching fresh {title} with RUST_CHATBOT_AUTO_UI_DEBUG=1 session_id={session_id}"
+        ),
         progress_path,
     )?;
     launch_window(app_root, provider, instance, Some(session_id))?;
     let launched_pid = wait_for_new_pid(app_root, &existing_pids, window_timeout)?
         .ok_or_else(|| anyhow!("Could not detect a newly launched PID for {title:?}."))?;
-    log_line(format!("detected launched_pid={launched_pid}"), progress_path)?;
+    log_line(
+        format!("detected launched_pid={launched_pid}"),
+        progress_path,
+    )?;
     let window_id = x11::find_window_id_for_pid(launched_pid, window_timeout)?
-        .or(x11::wait_for_new_window_id(title, &existing_window_ids, window_timeout)?)
+        .or(x11::wait_for_new_window_id(
+            title,
+            &existing_window_ids,
+            window_timeout,
+        )?)
         .ok_or_else(|| anyhow!("Could not find a new window matching {title:?} after launch."))?;
     if !keep_front {
         x11::background_window(&window_id, restore_window_id)?;
@@ -1505,8 +1686,38 @@ fn launch_targeted_session_window(
     Ok((launched_pid, window_id))
 }
 
+fn restore_reused_window(
+    window_id: &str,
+    geometry: &x11::WindowGeometry,
+    keep_front: bool,
+    restore_window_id: Option<&str>,
+    progress_path: Option<&Path>,
+) -> Result<()> {
+    if !x11::window_exists(window_id)? {
+        log_line(
+            format!("skipping restore for window_id={window_id} because the window is no longer available"),
+            progress_path,
+        )?;
+        return Ok(());
+    }
+
+    log_line(
+        format!(
+            "restoring window_id={window_id} x={} y={} width={} height={}",
+            geometry.x, geometry.y, geometry.width, geometry.height
+        ),
+        progress_path,
+    )?;
+    x11::set_window_geometry(window_id, geometry)?;
+    if !keep_front {
+        x11::background_window(window_id, restore_window_id)?;
+    }
+    Ok(())
+}
+
 fn read_new_lines(log_path: &Path, offset: u64) -> Result<(u64, Vec<String>)> {
-    let mut file = File::open(log_path).with_context(|| format!("failed to open {}", log_path.display()))?;
+    let mut file =
+        File::open(log_path).with_context(|| format!("failed to open {}", log_path.display()))?;
     file.seek(SeekFrom::Start(offset))?;
     let mut data = String::new();
     file.read_to_string(&mut data)?;
@@ -1552,7 +1763,8 @@ fn wait_for_trace_bundle(
                 saw_new_relevant_line = true;
                 continue;
             }
-            if line.contains("ui_auto_debug") && line.contains(&format!("session_id={session_id}")) {
+            if line.contains("ui_auto_debug") && line.contains(&format!("session_id={session_id}"))
+            {
                 last_ui_match = Some(parse_trace_fields(&line));
                 saw_new_relevant_line = true;
             }
