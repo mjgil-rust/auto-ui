@@ -1,0 +1,16 @@
+target = "gpui_component_testing"
+scenario = "conversation_paint"
+
+[app]
+root = "/home/m/git/gpui-component-testing"
+example = "llm_chat_conversation_bench_demo"
+
+[bench]
+threads = [0, 1, 2, 3]
+run_ms = 2500
+defer_first_frame = true
+window_title_prefix = "Auto UI GPUI Conversation Paint"
+
+[capture]
+capture_window = false
+settle_ms = 800

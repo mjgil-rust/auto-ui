@@ -83,6 +83,7 @@ dependencies = [
  "anyhow",
  "auto-ui-adapter-gpui",
  "auto-ui-adapter-rust-chatbot",
+ "auto-ui-artifacts",
  "auto-ui-core",
  "clap",
  "serde_json",

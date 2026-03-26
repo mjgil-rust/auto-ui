@@ -1,5 +1,6 @@
 mod debug_cmd;
 mod header_debug_cmd;
+mod report_schema_cmd;
 mod run_cmd;
 
 use clap::{Parser, Subcommand};
@@ -20,6 +21,7 @@ enum Command {
     Debug(debug_cmd::Args),
     HeaderDebug(header_debug_cmd::Args),
     Run(run_cmd::Args),
+    ReportSchema,
     Targets,
     Scenarios {
         #[arg(long)]
@@ -40,6 +42,7 @@ fn run() -> anyhow::Result<()> {
         Command::Debug(args) => debug_cmd::run(args),
         Command::HeaderDebug(args) => header_debug_cmd::run(args),
         Command::Run(args) => run_cmd::run(args),
+        Command::ReportSchema => report_schema_cmd::run(),
         Command::Targets => {
             println!("rust_chatbot");
             println!("gpui_component_testing");

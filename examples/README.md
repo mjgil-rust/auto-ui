@@ -19,3 +19,4 @@ This directory contains example usage for the current `auto-ui` CLI.
 - [rust-chatbot-header-debug.toml](/home/m/git/auto-ui/examples/rust-chatbot-header-debug.toml)
 - [gpui-scroll-matrix.toml](/home/m/git/auto-ui/examples/gpui-scroll-matrix.toml)
 - [gpui-scrollbar-trace.toml](/home/m/git/auto-ui/examples/gpui-scrollbar-trace.toml)
+- [gpui-conversation-paint.toml](/home/m/git/auto-ui/examples/gpui-conversation-paint.toml)

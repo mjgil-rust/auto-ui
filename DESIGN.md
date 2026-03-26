@@ -483,10 +483,13 @@ Later backends:
 
 ## Artifact Schema
 
-The current Python tools write a single `report.json` plus PNGs. That general
-shape is good and should stay, but the schema should become explicit.
+The report shape is now explicit and exported by the CLI with:
 
-Proposed top-level schema:
+```text
+auto-ui report-schema
+```
+
+Stable top-level shape:
 
 ```json
 {
@@ -505,7 +508,9 @@ Proposed top-level schema:
 ```
 
 Important constraint: imported target-generated artifacts and harness-generated
-artifacts should look the same at the report layer.
+artifacts should look the same at the report layer. Adapter-specific expansion
+should stay nested under `details`, `measurements[]`, `events[]`, or artifact
+`metadata` unless it is clearly shared across targets.
 
 ## CLI Design
 
@@ -516,7 +521,7 @@ auto-ui run --target rust_chatbot --scenario session-width-scan --config run.tom
 auto-ui run --target gpui_component_testing --scenario scroll-matrix --config run.toml
 auto-ui targets
 auto-ui scenarios --target rust_chatbot
-auto-ui inspect report ./tmp/run-123/report.json
+auto-ui report-schema
 ```
 
 Suggested command structure:
@@ -524,8 +529,7 @@ Suggested command structure:
 - `run`
 - `targets`
 - `scenarios`
-- `inspect`
-- `schema`
+- `report-schema`
 
 ## Build and Launch Policy
 

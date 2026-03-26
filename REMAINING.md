@@ -19,19 +19,11 @@ hardening, polish, and expansion work.
 
 ## 2. Report Schema Hardening
 
-- Freeze the top-level `report.json` schema more explicitly.
-- Document required versus optional fields for artifacts, measurements, and
-  details.
-- Add a machine-readable schema export command if needed.
 - Decide how much adapter-specific detail should remain nested under `details`
   versus promoted to shared top-level fields.
 
 ## 3. GPUI Coverage
 
-- Add more `gpui-component-testing` scenarios beyond `scroll_matrix` and
-  `scrollbar_trace`.
-- Improve startup-driven summaries so they match or exceed the old shell-script
-  reports.
 - Expand optional screenshot capture for gpui runs where visual inspection
   matters.
 - Decide whether the adapter should support custom commands in addition to

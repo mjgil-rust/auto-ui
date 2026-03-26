@@ -47,6 +47,7 @@ repo through the same lightweight path before running the binary.
 - `debug`: rust-chatbot width scan across sessions
 - `header-debug`: rust-chatbot single-session header capture flow
 - `run --config <file.toml>`: generic scenario runner
+- `report-schema`: print the stable `report.json` JSON schema
 - `targets`: list supported targets
 - `scenarios [--target <name>]`: list supported scenarios
 
@@ -77,7 +78,22 @@ target/debug/auto-ui header-debug \
 target/debug/auto-ui run --config examples/gpui-scroll-matrix.toml
 ```
 
+```bash
+target/debug/auto-ui run --config examples/gpui-conversation-paint.toml
+```
+
+```bash
+target/debug/auto-ui report-schema > report.schema.json
+```
+
 Artifacts land under `tmp/` in this repo unless `--output-dir` is provided.
+
+## Report Schema
+
+`report.json` now has an explicit machine-readable schema surface.
+
+- Use `target/debug/auto-ui report-schema` to print the current JSON schema.
+- See [REPORT_SCHEMA.md](/home/m/git/auto-ui/REPORT_SCHEMA.md) for the stable top-level contract and field notes.
 
 ## Live Smoke Tests
 
@@ -87,7 +103,8 @@ session, built target app binaries, and explicit env vars.
 - Set `AUTO_UI_RUN_LIVE_TESTS=1` to opt in.
 - Rust Chatbot tests also require `AUTO_UI_TEST_RUST_CHATBOT_ROOT` and
   `AUTO_UI_TEST_RUST_CHATBOT_SESSION_ID`.
-- GPUI tests require `AUTO_UI_TEST_GPUI_ROOT`.
+- GPUI tests require `AUTO_UI_TEST_GPUI_ROOT` and cover `scroll_matrix`,
+  `scrollbar_trace`, and `conversation_paint`.
 
 ## Desktop Behavior
 

@@ -122,6 +122,11 @@ mod tests {
     }
 
     #[test]
+    fn gpui_conversation_paint_example_validates() {
+        validate_example("examples/gpui-conversation-paint.toml").unwrap();
+    }
+
+    #[test]
     fn unsupported_target_error_lists_supported_targets() {
         let err = validate_selected_scenario("nope", "debug", &serde_json::Value::Null)
             .unwrap_err()

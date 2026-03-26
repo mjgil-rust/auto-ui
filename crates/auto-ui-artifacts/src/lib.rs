@@ -4,7 +4,9 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
+
+pub const REPORT_SCHEMA_VERSION: &str = "1";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ArtifactRef {
@@ -45,7 +47,7 @@ impl Report {
     pub fn new(target: &str, scenario: &str, mode: &str, app_root: &Path) -> Self {
         let started_at = Utc::now();
         Self {
-            schema_version: "1".to_string(),
+            schema_version: REPORT_SCHEMA_VERSION.to_string(),
             tool_version: env!("CARGO_PKG_VERSION").to_string(),
             target: target.to_string(),
             scenario: scenario.to_string(),
@@ -107,6 +109,121 @@ impl Report {
     }
 }
 
+pub fn report_schema_json() -> Value {
+    json!({
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "https://auto-ui.local/report.schema.json",
+        "title": "auto-ui report",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+            "schema_version",
+            "tool_version",
+            "target",
+            "scenario",
+            "mode",
+            "app_root",
+            "run_id",
+            "started_at",
+            "status",
+            "artifacts",
+            "measurements",
+            "events",
+            "details"
+        ],
+        "properties": {
+            "schema_version": {
+                "type": "string",
+                "const": REPORT_SCHEMA_VERSION,
+                "description": "Stable top-level report schema version."
+            },
+            "tool_version": {
+                "type": "string",
+                "description": "Version of the auto-ui binary that wrote the report."
+            },
+            "target": {
+                "type": "string",
+                "description": "Normalized target id, for example rust_chatbot."
+            },
+            "scenario": {
+                "type": "string",
+                "description": "Normalized scenario id, for example scroll_matrix."
+            },
+            "mode": {
+                "type": "string",
+                "description": "Execution mode chosen by the adapter."
+            },
+            "app_root": {
+                "type": "string",
+                "description": "Resolved target checkout or app root used for the run."
+            },
+            "run_id": {
+                "type": "string",
+                "description": "Run identifier scoped to the output directory."
+            },
+            "started_at": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "finished_at": {
+                "anyOf": [
+                    { "type": "string", "format": "date-time" },
+                    { "type": "null" }
+                ]
+            },
+            "status": {
+                "type": "string",
+                "enum": ["running", "ok", "error"]
+            },
+            "status_message": {
+                "anyOf": [
+                    { "type": "string" },
+                    { "type": "null" }
+                ]
+            },
+            "artifacts": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/artifact_ref" }
+            },
+            "measurements": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "description": "Shared measurement rows. Adapters may add extra keys."
+                }
+            },
+            "events": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "description": "Timeline or lifecycle events. Adapters may add extra keys."
+                }
+            },
+            "details": {
+                "description": "Adapter-specific structured JSON payload."
+            }
+        },
+        "$defs": {
+            "artifact_ref": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["kind", "path"],
+                "properties": {
+                    "kind": { "type": "string" },
+                    "path": { "type": "string" },
+                    "description": { "type": "string" },
+                    "metadata": {
+                        "anyOf": [
+                            { "type": "object" },
+                            { "type": "null" }
+                        ]
+                    }
+                }
+            }
+        }
+    })
+}
+
 pub fn write_report(output_dir: &Path, report: &Report) -> Result<PathBuf> {
     let report_path = report.report_path(output_dir);
     fs::write(&report_path, serde_json::to_string_pretty(report)?)
@@ -117,7 +234,6 @@ pub fn write_report(output_dir: &Path, report: &Report) -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn unique_temp_dir(name: &str) -> PathBuf {
@@ -130,7 +246,7 @@ mod tests {
 
     fn fixed_report() -> Report {
         Report {
-            schema_version: "1".to_string(),
+            schema_version: REPORT_SCHEMA_VERSION.to_string(),
             tool_version: "0.1.0".to_string(),
             target: "rust_chatbot".to_string(),
             scenario: "debug".to_string(),
@@ -195,6 +311,7 @@ mod tests {
     #[test]
     fn finish_methods_update_status_fields() {
         let mut report = Report::new("rust_chatbot", "debug", "hybrid", Path::new("/tmp/app"));
+        assert_eq!(report.schema_version, REPORT_SCHEMA_VERSION);
         report.finish_error("failed");
         assert_eq!(report.status, "error");
         assert_eq!(report.status_message.as_deref(), Some("failed"));
@@ -221,5 +338,31 @@ mod tests {
 
         let _ = fs::remove_file(path);
         let _ = fs::remove_dir(output_dir);
+    }
+
+    #[test]
+    fn report_schema_declares_required_top_level_fields() {
+        let schema = report_schema_json();
+        let required = schema
+            .get("required")
+            .and_then(Value::as_array)
+            .unwrap()
+            .iter()
+            .filter_map(Value::as_str)
+            .collect::<Vec<_>>();
+
+        assert!(required.contains(&"schema_version"));
+        assert!(required.contains(&"artifacts"));
+        assert!(required.contains(&"measurements"));
+        assert!(required.contains(&"events"));
+        assert!(required.contains(&"details"));
+        assert_eq!(
+            schema
+                .get("properties")
+                .and_then(|value| value.get("schema_version"))
+                .and_then(|value| value.get("const"))
+                .and_then(Value::as_str),
+            Some(REPORT_SCHEMA_VERSION)
+        );
     }
 }
