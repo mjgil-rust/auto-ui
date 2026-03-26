@@ -79,6 +79,16 @@ target/debug/auto-ui run --config examples/gpui-scroll-matrix.toml
 
 Artifacts land under `tmp/` in this repo unless `--output-dir` is provided.
 
+## Live Smoke Tests
+
+Ignored live smoke tests exist for the adapters. They require a real desktop
+session, built target app binaries, and explicit env vars.
+
+- Set `AUTO_UI_RUN_LIVE_TESTS=1` to opt in.
+- Rust Chatbot tests also require `AUTO_UI_TEST_RUST_CHATBOT_ROOT` and
+  `AUTO_UI_TEST_RUST_CHATBOT_SESSION_ID`.
+- GPUI tests require `AUTO_UI_TEST_GPUI_ROOT`.
+
 ## Desktop Behavior
 
 The automation should strive to be minimally conflicting with a desktop user's

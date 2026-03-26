@@ -532,21 +532,19 @@ fn run_process_with_optional_capture(
         .spawn()
         .with_context(|| "failed to start gpui process".to_string())?;
 
-    if capture_window {
-        thread::sleep(Duration::from_millis(settle_ms));
-        if let Some(screenshot_path) = screenshot_path {
-            if let Some(window_id) =
-                x11::find_window_id_for_pid(child.id() as i32, Duration::from_secs(2))?.or_else(
-                    || {
-                        window_title.and_then(|title| {
-                            x11::find_window_id(title, Duration::from_secs(2))
-                                .ok()
-                                .flatten()
-                        })
-                    },
-                )
-            {
-                let _ = x11::background_window(&window_id, restore_window_id.as_deref());
+    thread::sleep(Duration::from_millis(settle_ms));
+    if let Some(window_id) = x11::find_window_id_for_pid(child.id() as i32, Duration::from_secs(2))?
+        .or_else(|| {
+            window_title.and_then(|title| {
+                x11::find_window_id(title, Duration::from_secs(2))
+                    .ok()
+                    .flatten()
+            })
+        })
+    {
+        let _ = x11::background_window(&window_id, restore_window_id.as_deref());
+        if capture_window {
+            if let Some(screenshot_path) = screenshot_path {
                 let _ = x11::capture_window_screenshot(&window_id, screenshot_path);
             }
         }
@@ -696,4 +694,84 @@ fn write_scrollbar_summary(
         "- If `states=0` for the whole run, the content likely never overflowed the viewport.\n",
     );
     fs::write(path, out).with_context(|| format!("failed to write {}", path.display()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Mutex, OnceLock};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn live_test_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    fn unique_temp_dir(name: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path =
+            std::env::temp_dir().join(format!("auto-ui-{name}-{nanos}-{}", std::process::id()));
+        fs::create_dir_all(&path).unwrap();
+        path
+    }
+
+    fn require_env(name: &str) -> String {
+        std::env::var(name).unwrap_or_else(|_| panic!("set {name} to run this live smoke test"))
+    }
+
+    fn require_live_opt_in() {
+        assert_eq!(
+            std::env::var("AUTO_UI_RUN_LIVE_TESTS").as_deref(),
+            Ok("1"),
+            "set AUTO_UI_RUN_LIVE_TESTS=1 to run ignored live smoke tests"
+        );
+    }
+
+    #[test]
+    #[ignore = "requires DISPLAY, built gpui examples, and AUTO_UI_RUN_LIVE_TESTS=1"]
+    fn live_scroll_matrix_smoke() {
+        let _guard = live_test_lock().lock().unwrap();
+        require_live_opt_in();
+        let output_dir = unique_temp_dir("gpui-scroll-matrix-live");
+        let completed = run_scroll_matrix(ScrollMatrixConfig {
+            app_root: Some(require_env("AUTO_UI_TEST_GPUI_ROOT")),
+            example: "llm_chat_story_style_bench_demo".to_string(),
+            variants: vec!["plain_text".to_string()],
+            run_ms: 800,
+            warmup_ms: 150,
+            scroll_delay_ms: 16,
+            scroll_step_px: 40,
+            output_dir: Some(output_dir.display().to_string()),
+            capture_window: false,
+            settle_ms: 300,
+            window_title_prefix: "Auto UI GPUI Smoke".to_string(),
+        })
+        .unwrap();
+        assert!(completed.report_path.exists());
+    }
+
+    #[test]
+    #[ignore = "requires DISPLAY, built gpui examples, and AUTO_UI_RUN_LIVE_TESTS=1"]
+    fn live_scrollbar_trace_smoke() {
+        let _guard = live_test_lock().lock().unwrap();
+        require_live_opt_in();
+        let output_dir = unique_temp_dir("gpui-scrollbar-live");
+        let completed = run_scrollbar_trace(ScrollbarTraceConfig {
+            app_root: Some(require_env("AUTO_UI_TEST_GPUI_ROOT")),
+            example: "llm_chat_story_style_scrollbar_demo".to_string(),
+            run_ms: 800,
+            warmup_ms: 150,
+            scroll_delay_ms: 16,
+            scroll_step_px: 40,
+            output_dir: Some(output_dir.display().to_string()),
+            capture_window: false,
+            settle_ms: 300,
+            window_title: "Auto UI GPUI Scrollbar Smoke".to_string(),
+        })
+        .unwrap();
+        assert!(completed.report_path.exists());
+    }
 }

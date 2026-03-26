@@ -264,6 +264,7 @@ pub fn run_debug(config: DebugConfig) -> Result<CompletedRun> {
     let per_session_launch_mode = config.launch_if_missing && config.session_id.is_none();
     let mut window_id: Option<String> = None;
     let mut interaction_window_id: Option<String> = None;
+    let mut launched_debug_pid: Option<i32> = None;
     let mut restore_window_geometry: Option<(String, x11::WindowGeometry)> = None;
 
     if !per_session_launch_mode {
@@ -288,6 +289,7 @@ pub fn run_debug(config: DebugConfig) -> Result<CompletedRun> {
             let launched_pid =
                 wait_for_new_pid(&app_root, &existing_pids, seconds(config.window_timeout))?;
             if let Some(launched_pid) = launched_pid {
+                launched_debug_pid = Some(launched_pid);
                 log_line(
                     format!("detected launched_pid={launched_pid}"),
                     Some(&progress_path),
@@ -523,6 +525,20 @@ pub fn run_debug(config: DebugConfig) -> Result<CompletedRun> {
         } else if let Err(err) = restore_result {
             let _ = log_line(
                 format!("warning: failed to restore window_id={existing_window_id}: {err:#}"),
+                Some(&progress_path),
+            );
+        }
+    }
+
+    if let Some(launched_pid) = launched_debug_pid {
+        let stop_result = stop_chatbot_pid(&app_root, launched_pid).and_then(|_| {
+            wait_for_pid_exit(&app_root, launched_pid, seconds(config.window_timeout))
+        });
+        if result.is_ok() {
+            stop_result?;
+        } else if let Err(err) = stop_result {
+            let _ = log_line(
+                format!("warning: failed to stop launched_pid={launched_pid}: {err:#}"),
                 Some(&progress_path),
             );
         }
@@ -1872,4 +1888,104 @@ fn clamp(value: i32, low: i32, high: i32) -> i32 {
 
 fn seconds(value: f64) -> Duration {
     Duration::from_secs_f64(value.max(0.0))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Mutex, OnceLock};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn live_test_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    fn unique_temp_dir(name: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path =
+            std::env::temp_dir().join(format!("auto-ui-{name}-{nanos}-{}", std::process::id()));
+        fs::create_dir_all(&path).unwrap();
+        path
+    }
+
+    fn require_env(name: &str) -> String {
+        std::env::var(name).unwrap_or_else(|_| panic!("set {name} to run this live smoke test"))
+    }
+
+    fn require_live_opt_in() {
+        assert_eq!(
+            std::env::var("AUTO_UI_RUN_LIVE_TESTS").as_deref(),
+            Ok("1"),
+            "set AUTO_UI_RUN_LIVE_TESTS=1 to run ignored live smoke tests"
+        );
+    }
+
+    fn provider_from_env() -> Provider {
+        match std::env::var("AUTO_UI_TEST_RUST_CHATBOT_PROVIDER")
+            .unwrap_or_else(|_| "codex".to_string())
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "claude" => Provider::Claude,
+            "codex" => Provider::Codex,
+            "gemini" => Provider::Gemini,
+            other => panic!("unsupported AUTO_UI_TEST_RUST_CHATBOT_PROVIDER={other}"),
+        }
+    }
+
+    #[test]
+    #[ignore = "requires DISPLAY, built rust-chatbot binaries, and AUTO_UI_RUN_LIVE_TESTS=1"]
+    fn live_debug_single_session_smoke() {
+        let _guard = live_test_lock().lock().unwrap();
+        require_live_opt_in();
+        let output_dir = unique_temp_dir("rust-chatbot-debug-live");
+        let completed = run_debug(DebugConfig {
+            app_root: Some(require_env("AUTO_UI_TEST_RUST_CHATBOT_ROOT")),
+            provider: provider_from_env(),
+            instance: None,
+            widths: "520".to_string(),
+            height: 720,
+            max_sessions: 1,
+            session_id: Some(require_env("AUTO_UI_TEST_RUST_CHATBOT_SESSION_ID")),
+            include_hidden: true,
+            launch_if_missing: true,
+            window_timeout: 20.0,
+            trace_timeout: 10.0,
+            settle: 0.7,
+            output_dir: Some(output_dir.display().to_string()),
+            keep_front: false,
+        })
+        .unwrap();
+        assert!(completed.report_path.exists());
+    }
+
+    #[test]
+    #[ignore = "requires DISPLAY, built rust-chatbot binaries, and AUTO_UI_RUN_LIVE_TESTS=1"]
+    fn live_header_debug_single_session_smoke() {
+        let _guard = live_test_lock().lock().unwrap();
+        require_live_opt_in();
+        let output_dir = unique_temp_dir("rust-chatbot-header-live");
+        let completed = run_header_debug(HeaderDebugConfig {
+            app_root: Some(require_env("AUTO_UI_TEST_RUST_CHATBOT_ROOT")),
+            provider: provider_from_env(),
+            instance: None,
+            session_id: Some(require_env("AUTO_UI_TEST_RUST_CHATBOT_SESSION_ID")),
+            session_name: None,
+            include_hidden: true,
+            widths: "520".to_string(),
+            height: 720,
+            header_height: 140,
+            window_timeout: 20.0,
+            trace_timeout: 12.0,
+            settle: 0.8,
+            output_dir: Some(output_dir.display().to_string()),
+            keep_front: false,
+        })
+        .unwrap();
+        assert!(completed.report_path.exists());
+    }
 }
