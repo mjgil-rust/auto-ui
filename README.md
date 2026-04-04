@@ -46,6 +46,7 @@ repo through the same lightweight path before running the binary.
 
 - `debug`: rust-chatbot width scan across sessions
 - `header-debug`: rust-chatbot single-session header capture flow
+- `run --config <file.toml>` with `scenario = "prompt_debug"`: rust-chatbot targeted prompt + timing capture
 - `run --config <file.toml>`: generic scenario runner
 - `report-schema`: print the stable `report.json` JSON schema
 - `targets`: list supported targets
@@ -80,6 +81,10 @@ target/debug/auto-ui run --config examples/gpui-scroll-matrix.toml
 
 ```bash
 target/debug/auto-ui run --config examples/gpui-conversation-paint.toml
+```
+
+```bash
+target/debug/auto-ui run --config examples/rust-chatbot-prompt-debug.toml
 ```
 
 ```bash

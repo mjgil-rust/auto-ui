@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 
 pub const TARGET_ID: &str = "rust_chatbot";
-pub const SCENARIOS: &[&str] = &["debug", "header_debug"];
+pub const SCENARIOS: &[&str] = &["debug", "header_debug", "prompt_debug"];
 const DEFAULT_SESSION_NAMES: &[&str] = &[
     "pl-update",
     "pl-enhance",
@@ -159,6 +159,41 @@ impl Default for HeaderDebugConfig {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PromptDebugConfig {
+    pub app_root: Option<String>,
+    pub provider: Provider,
+    pub instance: Option<u32>,
+    pub session_id: String,
+    pub prompt: String,
+    pub width: u32,
+    pub height: u32,
+    pub window_timeout: f64,
+    pub response_timeout: f64,
+    pub settle: f64,
+    pub output_dir: Option<String>,
+    pub keep_front: bool,
+}
+
+impl Default for PromptDebugConfig {
+    fn default() -> Self {
+        Self {
+            app_root: None,
+            provider: Provider::Codex,
+            instance: None,
+            session_id: String::new(),
+            prompt: String::new(),
+            width: 700,
+            height: 900,
+            window_timeout: 15.0,
+            response_timeout: 45.0,
+            settle: 0.8,
+            output_dir: None,
+            keep_front: false,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 struct SessionDetails {
     session_id: String,
@@ -191,6 +226,10 @@ pub fn validate_named_scenario(scenario: &str, value: &Value) -> Result<()> {
             header_config_from_scenario(value.clone(), None)?;
             Ok(())
         }
+        "prompt_debug" => {
+            prompt_debug_config_from_scenario(value.clone(), None)?;
+            Ok(())
+        }
         other => bail!("Unsupported rust-chatbot scenario {other:?}."),
     }
 }
@@ -208,6 +247,10 @@ pub fn run_named_scenario(
         "header_debug" => {
             let config = header_config_from_scenario(value, output_override)?;
             run_header_debug(config)
+        }
+        "prompt_debug" => {
+            let config = prompt_debug_config_from_scenario(value, output_override)?;
+            run_prompt_debug(config)
         }
         other => bail!("Unsupported rust-chatbot scenario {other:?}."),
     }
@@ -903,6 +946,134 @@ pub fn run_header_debug(config: HeaderDebugConfig) -> Result<CompletedRun> {
     result
 }
 
+pub fn run_prompt_debug(config: PromptDebugConfig) -> Result<CompletedRun> {
+    auto_ui_core::ensure_display("Rust Chatbot")?;
+
+    if config.session_id.trim().is_empty() {
+        bail!("prompt_debug requires a non-empty session_id");
+    }
+    if config.prompt.trim().is_empty() {
+        bail!("prompt_debug requires a non-empty prompt");
+    }
+
+    let app_root = resolve_app_root(config.app_root.as_deref())?;
+    require_release_binaries(&app_root, &["chatbot-ctl", "rust-chatbot"])?;
+    let desktop_window_id = x11::get_active_window_id()?;
+    let title = provider_title(config.provider, &app_root);
+    let output_dir = build_output_dir(config.output_dir.as_deref(), "auto-ui-prompt-debug")?;
+    let progress_path = output_dir.join("progress.log");
+    let log_path = newest_trace_log()?;
+
+    log_line(format!("app_root={}", app_root.display()), Some(&progress_path))?;
+    log_line(format!("output_dir={}", output_dir.display()), Some(&progress_path))?;
+    log_line(format!("trace_log={}", log_path.display()), Some(&progress_path))?;
+    log_line(format!("session_id={}", config.session_id), Some(&progress_path))?;
+
+    let mut launched_pid = None;
+    let result = (|| -> Result<CompletedRun> {
+        let (new_pid, window_id) = launch_targeted_session_window(
+            &app_root,
+            config.provider,
+            config.instance,
+            &title,
+            &config.session_id,
+            config.keep_front,
+            seconds(config.window_timeout),
+            Some(&progress_path),
+            desktop_window_id.as_deref(),
+        )?;
+        launched_pid = Some(new_pid);
+
+        if config.keep_front {
+            x11::resize_window(&window_id, config.width, config.height)?;
+        } else {
+            x11::prepare_window_for_capture(
+                &window_id,
+                config.width,
+                config.height,
+                desktop_window_id.as_deref(),
+            )?;
+        }
+        thread::sleep(seconds(config.settle));
+
+        let log_offset = fs::metadata(&log_path)?.len();
+        send_prompt_to_session(
+            &app_root,
+            config.provider,
+            &config.session_id,
+            &config.prompt,
+            launched_pid,
+        )?;
+        log_line("prompt sent via chatbot-ctl send".to_string(), Some(&progress_path))?;
+
+        let prompt_result = wait_for_prompt_result(
+            &log_path,
+            log_offset,
+            &config.session_id,
+            seconds(config.response_timeout),
+            seconds(2.5),
+        )?;
+
+        let screenshot_path = output_dir.join(format!(
+            "{}-{}-prompt-window.png",
+            config.provider.as_str(),
+            &config.session_id[..8.min(config.session_id.len())]
+        ));
+        x11::capture_window_screenshot(&window_id, &screenshot_path)?;
+
+        let mut report = Report::new(TARGET_ID, "prompt_debug", "hybrid", &app_root);
+        report.add_artifact(
+            "progress_log",
+            progress_path.display().to_string(),
+            Some("live progress log".to_string()),
+            Value::Null,
+        );
+        report.add_artifact(
+            "trace_log",
+            log_path.display().to_string(),
+            Some("rust-chatbot trace log".to_string()),
+            Value::Null,
+        );
+        report.add_artifact(
+            "window_screenshot",
+            screenshot_path.display().to_string(),
+            Some("captured prompt-debug window".to_string()),
+            json!({
+                "width": config.width,
+                "height": config.height,
+            }),
+        );
+        report.push_measurement(json!({
+            "session_id": config.session_id,
+            "provider": config.provider.as_str(),
+            "width": config.width,
+            "height": config.height,
+            "prompt_len": config.prompt.len(),
+            "ai_response_end": prompt_result.ai_response_end,
+            "upgrade_events": prompt_result.upgrade_events,
+            "last_markdown_row": prompt_result.last_markdown_row,
+        }));
+        report.finish_ok();
+        let report_path = write_report(&output_dir, &report)?;
+        println!("wrote {}", report_path.display());
+        println!("  progress: {}", progress_path.display());
+        println!("  trace: {}", log_path.display());
+        println!("  report: {}", report_path.display());
+
+        Ok(CompletedRun {
+            output_dir,
+            report_path,
+        })
+    })();
+
+    if let Some(launched_pid) = launched_pid {
+        let _ = stop_chatbot_pid(&app_root, launched_pid);
+        let _ = wait_for_pid_exit(&app_root, launched_pid, seconds(config.window_timeout));
+    }
+
+    result
+}
+
 fn debug_config_from_scenario(
     value: Value,
     output_override: Option<String>,
@@ -975,6 +1146,37 @@ fn header_config_from_scenario(
     Ok(config)
 }
 
+fn prompt_debug_config_from_scenario(
+    value: Value,
+    output_override: Option<String>,
+) -> Result<PromptDebugConfig> {
+    let scenario: PromptDebugScenarioFile = serde_json::from_value(value)?;
+    let mut config = PromptDebugConfig::default();
+    if let Some(app) = scenario.app {
+        config.app_root = app.root;
+        config.provider = app.provider.unwrap_or(config.provider);
+        config.instance = app.instance;
+        if let Some(session_id) = app.session_id {
+            config.session_id = session_id;
+        }
+    }
+    if let Some(window) = scenario.window {
+        config.width = window.width.unwrap_or(config.width);
+        config.height = window.height.unwrap_or(config.height);
+        config.keep_front = window.keep_front.unwrap_or(config.keep_front);
+    }
+    if let Some(prompt) = scenario.prompt {
+        config.prompt = prompt.text.unwrap_or_default();
+    }
+    if let Some(runtime) = scenario.runtime {
+        config.window_timeout = runtime.window_timeout.unwrap_or(config.window_timeout);
+        config.response_timeout = runtime.trace_timeout.unwrap_or(config.response_timeout);
+        config.settle = runtime.settle.unwrap_or(config.settle);
+    }
+    config.output_dir = output_override.or(scenario.output_dir);
+    Ok(config)
+}
+
 #[derive(Deserialize)]
 struct DebugScenarioFile {
     output_dir: Option<String>,
@@ -989,6 +1191,15 @@ struct HeaderScenarioFile {
     app: Option<HeaderScenarioApp>,
     window: Option<HeaderScenarioWindow>,
     capture: Option<HeaderCapture>,
+    runtime: Option<ScenarioRuntime>,
+}
+
+#[derive(Deserialize)]
+struct PromptDebugScenarioFile {
+    output_dir: Option<String>,
+    app: Option<PromptDebugScenarioApp>,
+    window: Option<PromptDebugScenarioWindow>,
+    prompt: Option<PromptScenarioPrompt>,
     runtime: Option<ScenarioRuntime>,
 }
 
@@ -1013,6 +1224,14 @@ struct HeaderScenarioApp {
 }
 
 #[derive(Deserialize)]
+struct PromptDebugScenarioApp {
+    root: Option<String>,
+    provider: Option<Provider>,
+    instance: Option<u32>,
+    session_id: Option<String>,
+}
+
+#[derive(Deserialize)]
 struct DebugScenarioWindow {
     widths: Option<Vec<u32>>,
     height: Option<u32>,
@@ -1025,6 +1244,18 @@ struct HeaderScenarioWindow {
     widths: Option<Vec<u32>>,
     height: Option<u32>,
     keep_front: Option<bool>,
+}
+
+#[derive(Deserialize)]
+struct PromptDebugScenarioWindow {
+    width: Option<u32>,
+    height: Option<u32>,
+    keep_front: Option<bool>,
+}
+
+#[derive(Deserialize)]
+struct PromptScenarioPrompt {
+    text: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -1753,6 +1984,113 @@ fn read_new_lines(log_path: &Path, offset: u64) -> Result<(u64, Vec<String>)> {
     file.read_to_string(&mut data)?;
     let new_offset = file.stream_position()?;
     Ok((new_offset, data.lines().map(ToOwned::to_owned).collect()))
+}
+
+#[derive(Clone, Debug)]
+struct PromptResult {
+    ai_response_end: Option<TraceFields>,
+    upgrade_events: Vec<TraceFields>,
+    last_markdown_row: Option<TraceFields>,
+}
+
+fn send_prompt_to_session(
+    app_root: &Path,
+    provider: Provider,
+    session_id: &str,
+    prompt: &str,
+    owner_pid: Option<i32>,
+) -> Result<()> {
+    let mut cmd = Command::new(chatbot_ctl_path(app_root));
+    cmd.current_dir(app_root)
+        .arg("send")
+        .arg("--provider")
+        .arg(provider.as_str())
+        .arg("--chat-id")
+        .arg(session_id)
+        .arg("--text")
+        .arg(prompt);
+    if let Some(owner_pid) = owner_pid {
+        cmd.arg("--owner-pid").arg(owner_pid.to_string());
+    }
+    let rendered = auto_ui_core::render_command(&cmd);
+    let status = cmd
+        .status()
+        .with_context(|| format!("failed to run {rendered}"))?;
+    if !status.success() {
+        bail!("command failed: {rendered}");
+    }
+    Ok(())
+}
+
+fn wait_for_prompt_result(
+    log_path: &Path,
+    offset: u64,
+    session_id: &str,
+    timeout: Duration,
+    quiet_after_end: Duration,
+) -> Result<PromptResult> {
+    let deadline = Instant::now() + timeout;
+    let mut current_offset = offset;
+    let mut quiet_deadline: Option<Instant> = None;
+    let mut ai_response_end: Option<TraceFields> = None;
+    let mut upgrade_events: Vec<TraceFields> = Vec::new();
+    let mut last_markdown_row: Option<TraceFields> = None;
+
+    while Instant::now() < deadline {
+        let (new_offset, lines) = read_new_lines(log_path, current_offset)?;
+        current_offset = new_offset;
+        let mut saw_relevant = false;
+
+        for line in lines {
+            if !line.contains(&format!("session_id=\"{session_id}\""))
+                && !line.contains(&format!("session_id={session_id}"))
+            {
+                continue;
+            }
+            if line.contains("ai_response_end") {
+                ai_response_end = Some(parse_trace_fields(&line));
+                quiet_deadline = Some(Instant::now() + quiet_after_end);
+                saw_relevant = true;
+            } else if line.contains("assistant_markdown_upgrade_latency") {
+                upgrade_events.push(parse_trace_fields(&line));
+                saw_relevant = true;
+            } else if line.contains("message_row_render_time")
+                && line.contains("rendered_as_markdown=true")
+                && line.contains("is_user=false")
+                && line.contains("is_tail_message=true")
+            {
+                last_markdown_row = Some(parse_trace_fields(&line));
+                saw_relevant = true;
+            }
+        }
+
+        let completion_observed = ai_response_end.is_some() || !upgrade_events.is_empty();
+        if completion_observed {
+            if saw_relevant {
+                quiet_deadline = Some(Instant::now() + quiet_after_end);
+            } else if let Some(quiet_deadline) = quiet_deadline {
+                if Instant::now() >= quiet_deadline {
+                    return Ok(PromptResult {
+                        ai_response_end,
+                        upgrade_events,
+                        last_markdown_row,
+                    });
+                }
+            }
+        }
+
+        thread::sleep(Duration::from_millis(150));
+    }
+
+    if ai_response_end.is_none() && upgrade_events.is_empty() {
+        bail!("Timed out waiting for ai_response_end for session {session_id}");
+    }
+
+    Ok(PromptResult {
+        ai_response_end,
+        upgrade_events,
+        last_markdown_row,
+    })
 }
 
 fn parse_trace_fields(line: &str) -> TraceFields {

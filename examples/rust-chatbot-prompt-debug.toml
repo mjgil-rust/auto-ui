@@ -1,0 +1,20 @@
+target = "rust_chatbot"
+scenario = "prompt_debug"
+
+[app]
+root = "/home/m/git/rust-chatbot"
+provider = "codex"
+session_id = "replace-me-session-id"
+
+[window]
+width = 700
+height = 900
+keep_front = false
+
+[prompt]
+text = "Generate about 6 KB of markdown with headings, bullets, a table, and a fenced code block. Show it here."
+
+[runtime]
+window_timeout = 15
+trace_timeout = 45
+settle = 0.8
