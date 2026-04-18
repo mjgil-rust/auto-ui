@@ -14,8 +14,9 @@ hardening, polish, and expansion work.
   - `gpui-component-testing` `scrollbar_trace`
 - Add golden tests for `report.json` shape so schema drift is caught early.
 - Add validation for scenario TOML files before adapter execution.
-- Tighten error messages around missing binaries, missing env hooks, and missing
-  target roots.
+- ~~Tighten error messages around missing binaries, missing env hooks, and missing
+  target roots.~~ (GPUI adapter now bails on missing parent instead of silently
+  falling back to `/`; CSV parse failures are logged with row counts.)
 
 ## 2. Report Schema Hardening
 

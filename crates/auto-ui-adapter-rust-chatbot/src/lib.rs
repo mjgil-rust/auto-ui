@@ -964,10 +964,22 @@ pub fn run_prompt_debug(config: PromptDebugConfig) -> Result<CompletedRun> {
     let progress_path = output_dir.join("progress.log");
     let log_path = newest_trace_log()?;
 
-    log_line(format!("app_root={}", app_root.display()), Some(&progress_path))?;
-    log_line(format!("output_dir={}", output_dir.display()), Some(&progress_path))?;
-    log_line(format!("trace_log={}", log_path.display()), Some(&progress_path))?;
-    log_line(format!("session_id={}", config.session_id), Some(&progress_path))?;
+    log_line(
+        format!("app_root={}", app_root.display()),
+        Some(&progress_path),
+    )?;
+    log_line(
+        format!("output_dir={}", output_dir.display()),
+        Some(&progress_path),
+    )?;
+    log_line(
+        format!("trace_log={}", log_path.display()),
+        Some(&progress_path),
+    )?;
+    log_line(
+        format!("session_id={}", config.session_id),
+        Some(&progress_path),
+    )?;
 
     let mut launched_pid = None;
     let result = (|| -> Result<CompletedRun> {
@@ -1004,7 +1016,10 @@ pub fn run_prompt_debug(config: PromptDebugConfig) -> Result<CompletedRun> {
             &config.prompt,
             launched_pid,
         )?;
-        log_line("prompt sent via chatbot-ctl send".to_string(), Some(&progress_path))?;
+        log_line(
+            "prompt sent via chatbot-ctl send".to_string(),
+            Some(&progress_path),
+        )?;
 
         let prompt_result = wait_for_prompt_result(
             &log_path,
@@ -1395,7 +1410,6 @@ fn run_width_session(
     let mut launched_pid: Option<i32> = None;
     let mut current_window_id = window_id.clone();
     let mut current_log_offset = *log_offset;
-    let mut geometry: Option<x11::WindowGeometry> = None;
     let mut startup_trace = None;
     let mut startup_code_block_traces = Vec::new();
 
@@ -1462,7 +1476,7 @@ fn run_width_session(
             format!("resizing window to width={width} height={}", config.height),
             Some(progress_path),
         )?;
-        geometry = Some(if !config.keep_front {
+        let geometry = if !config.keep_front {
             x11::prepare_window_for_capture(
                 &current_window_id,
                 width,
@@ -1471,7 +1485,7 @@ fn run_width_session(
             )?
         } else {
             x11::resize_window(&current_window_id, width, config.height)?
-        });
+        };
         thread::sleep(seconds(config.settle));
 
         let (new_log_offset, trace, code_block_traces) = match wait_for_trace_bundle(
@@ -1521,7 +1535,6 @@ fn run_width_session(
         )?;
         x11::capture_window_screenshot(&current_window_id, &screenshot_path)?;
 
-        let geometry = geometry.ok_or_else(|| anyhow!("window geometry missing after resize"))?;
         let ppp = trace
             .get("pixels_per_point")
             .and_then(|value| value.parse::<f64>().ok())

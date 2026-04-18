@@ -589,10 +589,11 @@ fn resolve_app_root(raw_path: Option<&str>) -> Result<PathBuf> {
         }
     }
 
-    let sibling = repo_root()
+    let root = repo_root();
+    let parent = root
         .parent()
-        .unwrap_or_else(|| Path::new("/"))
-        .join("gpui-component-testing");
+        .with_context(|| format!("repo root has no parent: {}", root.display()))?;
+    let sibling = parent.join("gpui-component-testing");
     if sibling.exists() {
         return sibling
             .canonicalize()
@@ -772,7 +773,7 @@ fn run_process_with_optional_capture(
     let restore_window_id = x11::get_active_window_id()?;
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
-    let mut child = command
+    let child = command
         .spawn()
         .with_context(|| "failed to start gpui process".to_string())?;
 
@@ -829,24 +830,59 @@ fn summarize_scroll_matrix_csv(path: &Path, warmup_ms: u64) -> Result<ScrollMatr
     let mut frame_values = Vec::new();
     let mut content_values = Vec::new();
     let mut prepaint_values = Vec::new();
+    let mut dropped_rows = 0usize;
     for (index, line) in text.lines().enumerate() {
         if index == 0 || line.trim().is_empty() {
             continue;
         }
         let cols: Vec<_> = line.split(',').collect();
         if cols.len() < 10 {
+            dropped_rows += 1;
             continue;
         }
-        let timestamp_ms = cols[0].trim().parse::<u64>().unwrap_or(0);
+        let timestamp_ms = match cols[0].trim().parse::<u64>() {
+            Ok(v) => v,
+            Err(_) => {
+                dropped_rows += 1;
+                continue;
+            }
+        };
         if timestamp_ms < warmup_ms {
             continue;
         }
-        let frame_us = cols[3].trim().parse::<f64>().unwrap_or(0.0);
+        let frame_us = match cols[3].trim().parse::<f64>() {
+            Ok(v) => v,
+            Err(_) => {
+                dropped_rows += 1;
+                continue;
+            }
+        };
         frame_values.push(frame_us / 1000.0);
-        let content_us = cols[7].trim().parse::<f64>().unwrap_or(0.0);
+        let content_us = match cols[7].trim().parse::<f64>() {
+            Ok(v) => v,
+            Err(_) => {
+                dropped_rows += 1;
+                continue;
+            }
+        };
         content_values.push(content_us / 1000.0);
-        let prepaint_ms = cols[9].trim().parse::<f64>().unwrap_or(0.0);
+        let prepaint_ms = match cols[9].trim().parse::<f64>() {
+            Ok(v) => v,
+            Err(_) => {
+                dropped_rows += 1;
+                continue;
+            }
+        };
         prepaint_values.push(prepaint_ms);
+    }
+    if dropped_rows > 0 {
+        log_line(
+            format!(
+                "warning: dropped {dropped_rows} malformed row(s) from {}",
+                path.display()
+            ),
+            None,
+        )?;
     }
 
     if frame_values.is_empty() {

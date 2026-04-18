@@ -1,3 +1,5 @@
+mod display;
+
 use std::collections::BTreeMap;
 use std::env;
 use std::fs::{self, OpenOptions};
@@ -9,6 +11,8 @@ use anyhow::{anyhow, bail, Context, Result};
 use chrono::Local;
 use serde::Serialize;
 use serde_json::Value;
+
+pub use display::HeadlessDisplay;
 
 pub type TraceFields = BTreeMap<String, String>;
 pub const AUTO_UI_LAUNCH_BACKGROUND_ENV: &str = "AUTO_UI_LAUNCH_BACKGROUND";

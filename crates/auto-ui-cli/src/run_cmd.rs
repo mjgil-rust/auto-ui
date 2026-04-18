@@ -3,10 +3,11 @@ use std::path::PathBuf;
 use anyhow::{bail, Result};
 use auto_ui_adapter_gpui as gpui;
 use auto_ui_adapter_rust_chatbot as rust_chatbot;
-use auto_ui_core::{normalize_name, parse_scenario_file};
+use auto_ui_core::{normalize_name, parse_scenario_file, HeadlessDisplay};
 use clap::Args as ClapArgs;
 
 const SUPPORTED_TARGETS: &[&str] = &["rust_chatbot", "gpui_component_testing"];
+const DEFAULT_GEOMETRY: &str = "1280x800x24";
 
 #[derive(Clone, Debug, ClapArgs)]
 pub struct Args {
@@ -18,9 +19,22 @@ pub struct Args {
     pub scenario: Option<String>,
     #[arg(long)]
     pub output_dir: Option<String>,
+    /// Run on a private Xvfb display with openbox so no windows appear on the
+    /// user's real screen. Requires Xvfb and openbox to be installed.
+    #[arg(long)]
+    pub headless: bool,
+    /// Xvfb screen geometry (default: 1280x800x24). Only used with --headless.
+    #[arg(long, default_value = DEFAULT_GEOMETRY)]
+    pub geometry: String,
 }
 
 pub fn run(args: Args) -> Result<()> {
+    let _headless = if args.headless {
+        Some(HeadlessDisplay::start(&args.geometry)?)
+    } else {
+        None
+    };
+
     let scenario_file = parse_scenario_file(&args.config)?;
     let target = normalize_name(args.target.as_deref().unwrap_or(&scenario_file.target));
     let scenario = normalize_name(args.scenario.as_deref().unwrap_or(&scenario_file.scenario));
