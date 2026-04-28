@@ -134,7 +134,11 @@ pub fn validate_named_scenario(scenario: &str, value: &Value) -> Result<()> {
             Ok(())
         }
         "conversation_paint" => {
-            conversation_paint_config_from_scenario(value.clone(), None)?;
+            let config = conversation_paint_config_from_scenario(value.clone(), None)?;
+            // Validate that threads is not empty
+            if config.threads.is_empty() {
+                bail!("At least one thread is required for conversation_paint.");
+            }
             Ok(())
         }
         other => bail!("Unsupported gpui scenario {other:?}."),

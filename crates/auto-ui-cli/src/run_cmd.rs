@@ -191,4 +191,19 @@ mod tests {
             .to_string();
         assert!(err.contains("variant") || err.contains("required"));
     }
+
+    #[test]
+    fn conversation_paint_scenario_rejects_empty_threads() {
+        // Empty threads should fail validation since at least one thread is required
+        let value = serde_json::json!({
+            "bench": {
+                "threads": [],
+                "run_ms": 5000
+            }
+        });
+        let err = validate_selected_scenario("gpui_component_testing", "conversation_paint", &value)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("thread") || err.contains("required"));
+    }
 }
