@@ -1,6 +1,7 @@
 mod display;
 mod adapter_registry;
 mod startup_orchestration;
+mod interactive_window_orchestration;
 
 use std::collections::BTreeMap;
 use std::env;
@@ -21,6 +22,9 @@ pub const AUTO_UI_LAUNCH_BACKGROUND_ENV: &str = "AUTO_UI_LAUNCH_BACKGROUND";
 
 pub use adapter_registry::{AdapterRegistry, RegisteredAdapter};
 pub use startup_orchestration::{run_startup_scenario, StartupOrchestrationConfig, StartupOrchestrator};
+pub use interactive_window_orchestration::{
+    InteractiveOrchestrationConfig, InteractiveWindowOrchestrator, WindowGeometry, WindowState,
+};
 
 pub struct CommandOutput {
     pub stdout: String,
