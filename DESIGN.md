@@ -264,19 +264,43 @@ pub trait TargetAdapter: Send + Sync {
 Supporting types:
 
 ```rust
-pub struct PreparedRun {
-    pub strategy: LaunchStrategy,
-    pub expected_window: Option<WindowSelector>,
-    pub trace_source: Option<TraceSource>,
-    pub import_sources: Vec<ImportSource>,
-    pub env: std::collections::BTreeMap<String, String>,
+pub enum WindowSelector {
+    Pid { value: u32 },
+    Title { value: String },
+    TitlePattern { value: String },
+    Active,
+}
+
+pub enum TraceSource {
+    File { path: std::path::PathBuf, pattern: Option<String> },
+    EnvVar { name: String },
+    None,
+}
+
+pub struct ImportSource {
+    pub kind: String,
+    pub source: String,
+    pub dest: Option<String>,
+}
+
+pub struct CommandSpec {
+    pub program: std::path::PathBuf,
     pub args: Vec<String>,
+    pub env: std::collections::BTreeMap<String, String>,
+    pub cwd: Option<std::path::PathBuf>,
 }
 
 pub enum LaunchStrategy {
-    ExistingWindow(WindowSelector),
-    ManagedProcess(CommandSpec),
-    AutonomousProcess(CommandSpec),
+    ExistingWindow { selector: WindowSelector },
+    ManagedProcess { command: CommandSpec, background: bool },
+    AutonomousProcess { command: CommandSpec, background: bool },
+}
+
+pub struct PreparedRun {
+    pub strategy: LaunchStrategy,
+    pub expected_window: Option<WindowSelector>,
+    pub trace_source: TraceSource,
+    pub import_sources: Vec<ImportSource>,
 }
 ```
 

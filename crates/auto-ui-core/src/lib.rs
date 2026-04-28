@@ -147,6 +147,149 @@ impl RunResult {
     }
 }
 
+/// Specifies how to select a target window for automation.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum WindowSelector {
+    /// Select by PID.
+    Pid { value: u32 },
+    /// Select by window title (exact match).
+    Title { value: String },
+    /// Select by window title pattern (regex).
+    TitlePattern { value: String },
+    /// Select the active/focused window.
+    #[default]
+    Active,
+}
+
+/// Source for trace/log data from the target application.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum TraceSource {
+    /// Trace from a file on disk.
+    File {
+        path: PathBuf,
+        /// Pattern to match the latest trace file (e.g., "*.log.*").
+        pattern: Option<String>,
+    },
+    /// Trace from an environment variable.
+    EnvVar { name: String },
+    /// No trace source for this run.
+    None,
+}
+
+/// Source of artifacts to import after run completion.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub struct ImportSource {
+    /// Artifact kind identifier.
+    pub kind: String,
+    /// Source path or glob pattern.
+    pub source: String,
+    /// Optional destination name within the output directory.
+    pub dest: Option<String>,
+}
+
+/// Command specification for launching a process.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct CommandSpec {
+    /// Path to the executable.
+    pub program: PathBuf,
+    /// Command-line arguments.
+    #[serde(default)]
+    pub args: Vec<String>,
+    /// Environment variables to set (merged with existing env).
+    #[serde(default)]
+    pub env: BTreeMap<String, String>,
+    /// Working directory for the command.
+    pub cwd: Option<PathBuf>,
+}
+
+impl CommandSpec {
+    /// Creates a new command spec with the given program.
+    pub fn new(program: impl Into<PathBuf>) -> Self {
+        Self {
+            program: program.into(),
+            ..Default::default()
+        }
+    }
+
+    /// Adds an argument to the command.
+    pub fn arg(mut self, arg: impl Into<String>) -> Self {
+        self.args.push(arg.into());
+        self
+    }
+
+    /// Adds multiple arguments to the command.
+    pub fn args(mut self, args: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.args.extend(args.into_iter().map(|a| a.into()));
+        self
+    }
+
+    /// Sets an environment variable.
+    pub fn env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.env.insert(key.into(), value.into());
+        self
+    }
+
+    /// Sets the working directory.
+    pub fn cwd(mut self, path: impl Into<PathBuf>) -> Self {
+        self.cwd = Some(path.into());
+        self
+    }
+}
+
+/// Strategy for launching and managing the target application.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum LaunchStrategy {
+    /// Attach to an existing window without launching a new process.
+    ExistingWindow {
+        selector: WindowSelector,
+    },
+    /// Launch and manage the process lifecycle (window management, cleanup).
+    ManagedProcess {
+        command: CommandSpec,
+        /// Whether to request background launch via env var.
+        background: bool,
+    },
+    /// Launch as an autonomous process without harness window management.
+    AutonomousProcess {
+        command: CommandSpec,
+        /// Whether to request background launch via env var.
+        background: bool,
+    },
+}
+
+/// Prepared run containing all information needed to launch and track a scenario.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct PreparedRun {
+    /// How to launch the target application.
+    pub strategy: LaunchStrategy,
+    /// Expected window after launch (for verification).
+    pub expected_window: Option<WindowSelector>,
+    /// Source for trace/log data collection.
+    pub trace_source: TraceSource,
+    /// Artifacts to import after run completion.
+    #[serde(default)]
+    pub import_sources: Vec<ImportSource>,
+}
+
+impl Default for PreparedRun {
+    fn default() -> Self {
+        Self {
+            strategy: LaunchStrategy::ManagedProcess {
+                command: CommandSpec::default(),
+                background: false,
+            },
+            expected_window: None,
+            trace_source: TraceSource::None,
+            import_sources: Vec::new(),
+        }
+    }
+}
+
 pub fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
@@ -552,5 +695,263 @@ provider = "codex"
         assert_eq!(deserialized.status, RunStatus::Error);
         assert_eq!(deserialized.error.as_deref(), Some("something went wrong"));
         assert!(!deserialized.is_success());
+    }
+
+    // Tests for Task #7: PreparedRun and related types
+
+    #[test]
+    fn window_selector_default_is_active() {
+        assert_eq!(WindowSelector::default(), WindowSelector::Active);
+    }
+
+    #[test]
+    fn window_selector_serializes_correctly() {
+        assert_eq!(
+            serde_json::to_string(&WindowSelector::Active).unwrap(),
+            r#"{"type":"active"}"#
+        );
+        assert_eq!(
+            serde_json::to_string(&WindowSelector::Pid { value: 12345 }).unwrap(),
+            r#"{"type":"pid","value":12345}"#
+        );
+        assert_eq!(
+            serde_json::to_string(&WindowSelector::Title { value: "test".to_string() }).unwrap(),
+            r#"{"type":"title","value":"test"}"#
+        );
+        assert_eq!(
+            serde_json::to_string(&WindowSelector::TitlePattern { value: ".*test.*".to_string() }).unwrap(),
+            r#"{"type":"title_pattern","value":".*test.*"}"#
+        );
+    }
+
+    #[test]
+    fn window_selector_deserializes_correctly() {
+        assert_eq!(
+            serde_json::from_str::<WindowSelector>(r#"{"type":"active"}"#).unwrap(),
+            WindowSelector::Active
+        );
+        assert_eq!(
+            serde_json::from_str::<WindowSelector>(r#"{"type":"pid","value":12345}"#).unwrap(),
+            WindowSelector::Pid { value: 12345 }
+        );
+        assert_eq!(
+            serde_json::from_str::<WindowSelector>(r#"{"type":"title","value":"mywindow"}"#).unwrap(),
+            WindowSelector::Title { value: "mywindow".to_string() }
+        );
+        assert_eq!(
+            serde_json::from_str::<WindowSelector>(r#"{"type":"title_pattern","value":".*"}"#).unwrap(),
+            WindowSelector::TitlePattern { value: ".*".to_string() }
+        );
+    }
+
+    #[test]
+    fn trace_source_serializes_correctly() {
+        let none = TraceSource::None;
+        assert_eq!(serde_json::to_string(&none).unwrap(), r#"{"type":"none"}"#);
+
+        let file = TraceSource::File {
+            path: PathBuf::from("/var/log/app.log"),
+            pattern: Some("*.log.*".to_string()),
+        };
+        let json = serde_json::to_string(&file).unwrap();
+        assert!(json.contains("\"type\":\"file\""));
+        assert!(json.contains("\"/var/log/app.log\""));
+        assert!(json.contains("\"*.log.*\""));
+
+        let env_var = TraceSource::EnvVar { name: "TRACE_FILE".to_string() };
+        assert_eq!(
+            serde_json::to_string(&env_var).unwrap(),
+            r#"{"type":"env_var","name":"TRACE_FILE"}"#
+        );
+    }
+
+    #[test]
+    fn trace_source_deserializes_correctly() {
+        assert_eq!(
+            serde_json::from_str::<TraceSource>(r#"{"type":"none"}"#).unwrap(),
+            TraceSource::None
+        );
+        let file: TraceSource = serde_json::from_str(
+            r#"{"type":"file","path":"/tmp/trace.log","pattern":"*.log.*"}"#
+        ).unwrap();
+        match file {
+            TraceSource::File { path, pattern } => {
+                assert_eq!(path, PathBuf::from("/tmp/trace.log"));
+                assert_eq!(pattern, Some("*.log.*".to_string()));
+            }
+            _ => panic!("expected File variant"),
+        }
+        assert_eq!(
+            serde_json::from_str::<TraceSource>(r#"{"type":"env_var","name":"MY_TRACE"}"#).unwrap(),
+            TraceSource::EnvVar { name: "MY_TRACE".to_string() }
+        );
+    }
+
+    #[test]
+    fn import_source_serializes_correctly() {
+        let source = ImportSource {
+            kind: "csv".to_string(),
+            source: "/tmp/results.csv".to_string(),
+            dest: Some("data.csv".to_string()),
+        };
+        let json = serde_json::to_string(&source).unwrap();
+        assert!(json.contains("\"kind\":\"csv\""));
+        assert!(json.contains("\"/tmp/results.csv\""));
+        assert!(json.contains("\"data.csv\""));
+    }
+
+    #[test]
+    fn import_source_deserializes_correctly() {
+        let json = r#"{"type":"import_source","kind":"log","source":"*.log","dest":null}"#;
+        let source: ImportSource = serde_json::from_str(json).unwrap();
+        assert_eq!(source.kind, "log");
+        assert_eq!(source.source, "*.log");
+        assert_eq!(source.dest, None);
+    }
+
+    #[test]
+    fn command_spec_builder_pattern() {
+        let cmd = CommandSpec::new("/usr/bin/app")
+            .arg("--flag")
+            .args(["--config", "/tmp/config"])
+            .env("HOME", "/tmp")
+            .env("DEBUG", "1")
+            .cwd("/tmp/workdir");
+
+        assert_eq!(cmd.program, PathBuf::from("/usr/bin/app"));
+        assert_eq!(cmd.args, vec!["--flag", "--config", "/tmp/config"]);
+        assert_eq!(cmd.env.get("HOME"), Some(&"/tmp".to_string()));
+        assert_eq!(cmd.env.get("DEBUG"), Some(&"1".to_string()));
+        assert_eq!(cmd.cwd, Some(PathBuf::from("/tmp/workdir")));
+    }
+
+    #[test]
+    fn command_spec_default_is_empty() {
+        let cmd = CommandSpec::default();
+        assert_eq!(cmd.program, PathBuf::new());
+        assert!(cmd.args.is_empty());
+        assert!(cmd.env.is_empty());
+        assert!(cmd.cwd.is_none());
+    }
+
+    #[test]
+    fn command_spec_serialization() {
+        let cmd = CommandSpec::new("/bin/ls").arg("-la");
+        let json = serde_json::to_string(&cmd).unwrap();
+        let deserialized: CommandSpec = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.program, PathBuf::from("/bin/ls"));
+        assert_eq!(deserialized.args, vec!["-la"]);
+    }
+
+    #[test]
+    fn launch_strategy_serializes_correctly() {
+        let existing = LaunchStrategy::ExistingWindow {
+            selector: WindowSelector::Title { value: "test".to_string() },
+        };
+        let json = serde_json::to_string(&existing).unwrap();
+        assert!(json.contains("\"type\":\"existing_window\""));
+        assert!(json.contains("\"title\""));
+
+        let managed = LaunchStrategy::ManagedProcess {
+            command: CommandSpec::new("/bin/app").arg("--run"),
+            background: true,
+        };
+        let json = serde_json::to_string(&managed).unwrap();
+        assert!(json.contains("\"type\":\"managed_process\""));
+        assert!(json.contains("\"background\":true"));
+
+        let autonomous = LaunchStrategy::AutonomousProcess {
+            command: CommandSpec::new("/bin/daemon"),
+            background: false,
+        };
+        let json = serde_json::to_string(&autonomous).unwrap();
+        assert!(json.contains("\"type\":\"autonomous_process\""));
+        assert!(json.contains("\"background\":false"));
+    }
+
+    #[test]
+    fn launch_strategy_deserializes_correctly() {
+        let existing: LaunchStrategy = serde_json::from_str(
+            r#"{"type":"existing_window","selector":{"type":"active"}}"#
+        ).unwrap();
+        match existing {
+            LaunchStrategy::ExistingWindow { selector } => {
+                assert_eq!(selector, WindowSelector::Active);
+            }
+            _ => panic!("expected ExistingWindow variant"),
+        }
+
+        let managed: LaunchStrategy = serde_json::from_str(
+            r#"{"type":"managed_process","command":{"program":"/bin/ls","args":["-l"]},"background":true}"#
+        ).unwrap();
+        match managed {
+            LaunchStrategy::ManagedProcess { command, background } => {
+                assert_eq!(command.program, PathBuf::from("/bin/ls"));
+                assert!(background);
+            }
+            _ => panic!("expected ManagedProcess variant"),
+        }
+
+        let autonomous: LaunchStrategy = serde_json::from_str(
+            r#"{"type":"autonomous_process","command":{"program":"/bin/daemon"},"background":false}"#
+        ).unwrap();
+        match autonomous {
+            LaunchStrategy::AutonomousProcess { command, background } => {
+                assert_eq!(command.program, PathBuf::from("/bin/daemon"));
+                assert!(!background);
+            }
+            _ => panic!("expected AutonomousProcess variant"),
+        }
+    }
+
+    #[test]
+    fn prepared_run_default() {
+        let run = PreparedRun::default();
+        assert!(matches!(
+            run.strategy,
+            LaunchStrategy::ManagedProcess { .. }
+        ));
+        assert!(run.expected_window.is_none());
+        assert!(matches!(run.trace_source, TraceSource::None));
+        assert!(run.import_sources.is_empty());
+    }
+
+    #[test]
+    fn prepared_run_serialization() {
+        let run = PreparedRun {
+            strategy: LaunchStrategy::AutonomousProcess {
+                command: CommandSpec::new("/bin/test"),
+                background: true,
+            },
+            expected_window: Some(WindowSelector::Pid { value: 1000 }),
+            trace_source: TraceSource::File {
+                path: PathBuf::from("/var/log/test.log"),
+                pattern: None,
+            },
+            import_sources: vec![
+                ImportSource {
+                    kind: "csv".to_string(),
+                    source: "*.csv".to_string(),
+                    dest: None,
+                },
+            ],
+        };
+
+        let json = serde_json::to_string(&run).unwrap();
+        let deserialized: PreparedRun = serde_json::from_str(&json).unwrap();
+
+        assert!(matches!(
+            deserialized.strategy,
+            LaunchStrategy::AutonomousProcess { .. }
+        ));
+        assert!(matches!(
+            deserialized.expected_window,
+            Some(WindowSelector::Pid { value: 1000 })
+        ));
+        assert!(matches!(
+            deserialized.trace_source,
+            TraceSource::File { .. }
+        ));
+        assert_eq!(deserialized.import_sources.len(), 1);
     }
 }
