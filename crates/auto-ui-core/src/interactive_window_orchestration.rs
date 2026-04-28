@@ -4,12 +4,12 @@
 //! to manipulate windows directly (resize, focus, input, screenshot).
 
 use std::path::PathBuf;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::{LaunchedRun, WindowSelector};
+use crate::{Event, LaunchedRun, WindowSelector, log_line};
 
 /// Configuration for interactive window orchestration.
 #[derive(Clone, Debug)]
@@ -87,6 +87,26 @@ pub struct WindowState {
     pub z_order: i32,
 }
 
+/// Kinds of foreground control events emitted by the orchestrator.
+pub mod foreground_events {
+    pub const WINDOW_ACTIVATED: &str = "foreground_control";
+    pub const WINDOW_LOWERED: &str = "foreground_control";
+}
+
+/// Creates a timestamped Event for foreground control actions.
+fn make_foreground_event(action: &str, window_id: &str, message: &str) -> Event {
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| chrono::DateTime::from_timestamp(d.as_secs() as i64, 0).unwrap().to_rfc3339())
+        .unwrap_or_else(|_| "1970-01-01T00:00:00Z".to_string());
+
+    Event {
+        timestamp,
+        kind: action.to_string(),
+        message: Some(format!("window {}: {}", window_id, message)),
+    }
+}
+
 /// Orchestrator for interactive window scenarios.
 ///
 /// This handles window management operations like resize, focus, input, and
@@ -94,6 +114,14 @@ pub struct WindowState {
 #[derive(Default)]
 pub struct InteractiveWindowOrchestrator {
     config: InteractiveOrchestrationConfig,
+}
+
+/// Result of an interactive window scenario, including any foreground control events.
+pub struct InteractiveWindowResult {
+    /// The window state that was captured.
+    pub state: WindowState,
+    /// Foreground control events that were emitted during the scenario.
+    pub events: Vec<Event>,
 }
 
 impl InteractiveWindowOrchestrator {
@@ -162,6 +190,7 @@ impl InteractiveWindowOrchestrator {
     }
 
     /// Activates (brings to front) a window.
+    /// Emits a foreground control event for auditing.
     pub fn activate_window(&self, window_id: &str) -> Result<()> {
         Self::validate_window_id(window_id)?;
 
@@ -169,14 +198,23 @@ impl InteractiveWindowOrchestrator {
             bail!("cannot activate window: no window selector specified");
         }
 
+        // Log the foreground control event for auditing
+        let event = make_foreground_event(foreground_events::WINDOW_ACTIVATED, window_id, "activated");
+        log_line(format!("[EVENT] {}: {:?}", event.kind, event.message), self.config.progress_log.as_deref()).ok();
+
         // In a full implementation, this would call the window driver
         // and verify the window accepts focus
         Ok(())
     }
 
     /// Lowers a window (sends to back).
+    /// Emits a foreground control event for auditing.
     pub fn lower_window(&self, window_id: &str) -> Result<()> {
         Self::validate_window_id(window_id)?;
+
+        // Log the foreground control event for auditing
+        let event = make_foreground_event(foreground_events::WINDOW_LOWERED, window_id, "lowered");
+        log_line(format!("[EVENT] {}: {:?}", event.kind, event.message), self.config.progress_log.as_deref()).ok();
 
         // In a full implementation, this would call the window driver
         // and verify the window was successfully lowered
