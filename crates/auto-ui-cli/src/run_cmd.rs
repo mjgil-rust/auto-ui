@@ -41,6 +41,14 @@ pub fn run(args: Args) -> Result<()> {
     let output_override = args.output_dir.or(scenario_file.output_dir);
     validate_selected_scenario(&target, &scenario, &scenario_file.value)?;
 
+    tracing::info!(
+        target = %target,
+        scenario = %scenario,
+        config = %args.config.display(),
+        output_dir = ?output_override,
+        "starting scenario run"
+    );
+
     let completed = match target.as_str() {
         "rust_chatbot" => {
             rust_chatbot::run_named_scenario(&scenario, scenario_file.value, output_override)?
@@ -53,6 +61,12 @@ pub fn run(args: Args) -> Result<()> {
             SUPPORTED_TARGETS.join(", ")
         ),
     };
+
+    tracing::info!(
+        output_dir = %completed.output_dir.display(),
+        report_path = %completed.report_path.display(),
+        "scenario completed"
+    );
 
     println!("\ncompleted:");
     println!("  output_dir: {}", completed.output_dir.display());

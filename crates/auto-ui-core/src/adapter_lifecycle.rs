@@ -4,6 +4,7 @@
 //! even when errors occur during the launch process.
 
 use std::path::Path;
+use tracing::{info, warn};
 
 use anyhow::Result;
 
@@ -74,22 +75,30 @@ pub fn run_lifecycle<A: TargetAdapter>(
     spec: &crate::ScenarioSpec,
 ) -> LifecycleResult<(LaunchedRun, CollectedData)> {
     // Phase 1: Prepare
+    info!(adapter_id = %adapter.id(), scenario = %spec.name, "preparing adapter");
     let prepared = match adapter.prepare(ctx, spec) {
         Ok(p) => {
+            info!(adapter_id = %adapter.id(), "adapter prepared");
             log_line(format!("[LIFECYCLE] {} prepared", adapter.id()), None::<&Path>).ok();
             p
         }
-        Err(e) => return LifecycleResult::failure(e),
+        Err(e) => {
+            warn!(adapter_id = %adapter.id(), error = %e, "adapter prepare failed");
+            return LifecycleResult::failure(e);
+        }
     };
 
     // Phase 2: Launch with cleanup guarantee
+    info!(adapter_id = %adapter.id(), "launching adapter");
     let launched = match adapter.launch(ctx, &prepared) {
         Ok(l) => {
+            info!(adapter_id = %adapter.id(), pid = ?l.pid, "adapter launched");
             log_line(format!("[LIFECYCLE] {} launched (pid={:?})", adapter.id(), l.pid), None::<&Path>).ok();
             l
         }
         Err(e) => {
             // Launch failed - still try to clean up
+            warn!(adapter_id = %adapter.id(), error = %e, "adapter launch failed, running cleanup");
             let cleanup_result = run_cleanup(adapter, ctx, None);
             return LifecycleResult {
                 result: Err(e),
@@ -100,13 +109,16 @@ pub fn run_lifecycle<A: TargetAdapter>(
     };
 
     // Phase 3: Collect
+    info!(adapter_id = %adapter.id(), "collecting adapter data");
     let collected = match adapter.collect(ctx, &launched) {
         Ok(c) => {
+            info!(adapter_id = %adapter.id(), "adapter data collected");
             log_line(format!("[LIFECYCLE] {} collected", adapter.id()), None::<&Path>).ok();
             c
         }
         Err(e) => {
             // Collect failed - clean up and preserve original error
+            warn!(adapter_id = %adapter.id(), error = %e, "adapter collect failed, running cleanup");
             let cleanup_result = run_cleanup(adapter, ctx, Some(&launched));
             return LifecycleResult {
                 result: Err(e),
@@ -117,7 +129,9 @@ pub fn run_lifecycle<A: TargetAdapter>(
     };
 
     // Phase 4: Stop (normal cleanup)
+    info!(adapter_id = %adapter.id(), "stopping adapter");
     let cleanup_result = run_cleanup(adapter, ctx, Some(&launched));
+    info!(adapter_id = %adapter.id(), cleanup_called = %cleanup_result.called, "adapter stopped");
     log_line(format!("[LIFECYCLE] {} stopped", adapter.id()), None::<&Path>).ok();
 
     LifecycleResult {

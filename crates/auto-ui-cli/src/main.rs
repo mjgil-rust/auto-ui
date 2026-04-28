@@ -1,5 +1,6 @@
 mod debug_cmd;
 mod header_debug_cmd;
+mod logging;
 mod report_schema_cmd;
 mod run_cmd;
 
@@ -30,6 +31,7 @@ enum Command {
 }
 
 fn main() {
+    logging::init();
     if let Err(err) = run() {
         eprintln!("{err:#}");
         std::process::exit(1);
