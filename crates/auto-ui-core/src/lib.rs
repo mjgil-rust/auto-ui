@@ -290,6 +290,137 @@ impl Default for PreparedRun {
     }
 }
 
+/// Context passed to adapters for run execution.
+#[derive(Clone, Debug)]
+pub struct AdapterContext {
+    /// Root path of the target application.
+    pub app_root: PathBuf,
+    /// Output directory for this run.
+    pub output_dir: PathBuf,
+    /// Optional scenario-specific configuration.
+    pub config: Value,
+}
+
+impl AdapterContext {
+    /// Creates a new adapter context.
+    pub fn new(app_root: PathBuf, output_dir: PathBuf, config: Value) -> Self {
+        Self {
+            app_root,
+            output_dir,
+            config,
+        }
+    }
+}
+
+/// Reference to a discoverable scenario.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ScenarioRef {
+    /// Unique name of the scenario.
+    pub name: String,
+    /// Human-readable description.
+    pub description: Option<String>,
+}
+
+/// Specification for running a scenario.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ScenarioSpec {
+    /// Name of the scenario to run.
+    pub name: String,
+    /// Additional configuration for the scenario.
+    #[serde(default)]
+    pub config: Value,
+}
+
+/// Handle for a launched run.
+#[derive(Clone, Debug)]
+pub struct LaunchedRun {
+    /// PID of the launched process, if applicable.
+    pub pid: Option<u32>,
+    /// Window handle, if applicable.
+    pub window_id: Option<String>,
+    /// Command that was launched.
+    pub command: CommandSpec,
+    /// Environment at launch time.
+    pub env: BTreeMap<String, String>,
+}
+
+/// Result data collected after run completion.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct CollectedData {
+    /// Collected measurements.
+    #[serde(default)]
+    pub measurements: Vec<Measurement>,
+    /// Collected events.
+    #[serde(default)]
+    pub events: Vec<Event>,
+    /// Collected trace fields.
+    #[serde(default)]
+    pub trace_fields: TraceFields,
+    /// Artifacts produced by the run.
+    #[serde(default)]
+    pub artifacts: Vec<ArtifactRef>,
+}
+
+/// A single measurement row.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct Measurement {
+    pub name: String,
+    pub value: f64,
+    pub unit: Option<String>,
+}
+
+/// A lifecycle event.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct Event {
+    pub timestamp: String,
+    pub kind: String,
+    pub message: Option<String>,
+}
+
+/// Reference to an artifact produced by a run.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ArtifactRef {
+    pub kind: String,
+    pub path: String,
+}
+
+/// Core trait for target adapters.
+///
+/// Adapters implement this trait to provide target-specific logic for
+/// scenario discovery, preparation, launching, data collection, and cleanup.
+pub trait TargetAdapter: Send + Sync {
+    /// Returns the unique identifier for this adapter (e.g., "rust_chatbot").
+    fn id(&self) -> &'static str;
+
+    /// Discovers available scenarios for this adapter.
+    fn discover_scenarios(&self) -> Vec<ScenarioRef>;
+
+    /// Validates that a scenario name is valid for this adapter.
+    fn supports_scenario(&self, scenario: &str) -> bool {
+        self.discover_scenarios()
+            .iter()
+            .any(|s| s.name == scenario)
+    }
+
+    /// Prepares a run for the given scenario.
+    fn prepare(&self, ctx: &AdapterContext, spec: &ScenarioSpec) -> Result<PreparedRun>;
+
+    /// Launches a prepared run.
+    fn launch(&self, ctx: &AdapterContext, prepared: &PreparedRun) -> Result<LaunchedRun>;
+
+    /// Collects data from a completed or failed run.
+    fn collect(&self, ctx: &AdapterContext, run: &LaunchedRun) -> Result<CollectedData>;
+
+    /// Stops a running scenario.
+    fn stop(&self, ctx: &AdapterContext, run: &LaunchedRun) -> Result<()>;
+}
+
 pub fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
@@ -953,5 +1084,335 @@ provider = "codex"
             TraceSource::File { .. }
         ));
         assert_eq!(deserialized.import_sources.len(), 1);
+    }
+
+    // Tests for Task #5: TargetAdapter trait and related types
+
+    #[test]
+    fn adapter_context_creation() {
+        let ctx = AdapterContext::new(
+            PathBuf::from("/app/root"),
+            PathBuf::from("/output/dir"),
+            serde_json::json!({"key": "value"}),
+        );
+        assert_eq!(ctx.app_root, PathBuf::from("/app/root"));
+        assert_eq!(ctx.output_dir, PathBuf::from("/output/dir"));
+        assert_eq!(ctx.config, serde_json::json!({"key": "value"}));
+    }
+
+    #[test]
+    fn scenario_ref_serialization() {
+        let reference = ScenarioRef {
+            name: "test_scenario".to_string(),
+            description: Some("A test scenario".to_string()),
+        };
+        let json = serde_json::to_string(&reference).unwrap();
+        assert!(json.contains("\"name\":\"test_scenario\""));
+        assert!(json.contains("\"description\":\"A test scenario\""));
+    }
+
+    #[test]
+    fn scenario_spec_serialization() {
+        let spec = ScenarioSpec {
+            name: "my_scenario".to_string(),
+            config: serde_json::json!({"timeout": 30}),
+        };
+        let json = serde_json::to_string(&spec).unwrap();
+        assert!(json.contains("\"name\":\"my_scenario\""));
+        assert!(json.contains("\"timeout\":30"));
+    }
+
+    #[test]
+    fn launched_run_creation() {
+        let run = LaunchedRun {
+            pid: Some(12345),
+            window_id: Some("0x12345678".to_string()),
+            command: CommandSpec::new("/bin/app").arg("--run"),
+            env: BTreeMap::new(),
+        };
+        assert_eq!(run.pid, Some(12345));
+        assert_eq!(run.window_id, Some("0x12345678".to_string()));
+    }
+
+    #[test]
+    fn collected_data_default() {
+        let data = CollectedData::default();
+        assert!(data.measurements.is_empty());
+        assert!(data.events.is_empty());
+        assert!(data.trace_fields.is_empty());
+        assert!(data.artifacts.is_empty());
+    }
+
+    #[test]
+    fn collected_data_serialization() {
+        let data = CollectedData {
+            measurements: vec![Measurement {
+                name: "duration_ms".to_string(),
+                value: 1500.0,
+                unit: Some("ms".to_string()),
+            }],
+            events: vec![Event {
+                timestamp: "2024-01-01T00:00:00Z".to_string(),
+                kind: "launch".to_string(),
+                message: Some("Process started".to_string()),
+            }],
+            trace_fields: TraceFields::new(),
+            artifacts: vec![ArtifactRef {
+                kind: "screenshot".to_string(),
+                path: "/output/screenshot.png".to_string(),
+            }],
+        };
+        let json = serde_json::to_string(&data).unwrap();
+        assert!(json.contains("\"measurements\""));
+        assert!(json.contains("\"events\""));
+        assert!(json.contains("\"duration_ms\""));
+        assert!(json.contains("\"screenshot\""));
+    }
+
+    #[test]
+    fn measurement_serialization() {
+        let m = Measurement {
+            name: "bytes_per_second".to_string(),
+            value: 1024.5,
+            unit: Some("B/s".to_string()),
+        };
+        let json = serde_json::to_string(&m).unwrap();
+        assert!(json.contains("\"name\":\"bytes_per_second\""));
+        assert!(json.contains("\"value\":1024.5"));
+    }
+
+    #[test]
+    fn event_serialization() {
+        let e = Event {
+            timestamp: "2024-01-01T00:00:00Z".to_string(),
+            kind: "error".to_string(),
+            message: None,
+        };
+        let json = serde_json::to_string(&e).unwrap();
+        assert!(json.contains("\"timestamp\":\"2024-01-01T00:00:00Z\""));
+        assert!(json.contains("\"kind\":\"error\""));
+    }
+
+    #[test]
+    fn artifact_ref_serialization() {
+        let a = ArtifactRef {
+            kind: "csv".to_string(),
+            path: "/data/results.csv".to_string(),
+        };
+        let json = serde_json::to_string(&a).unwrap();
+        assert!(json.contains("\"kind\":\"csv\""));
+        assert!(json.contains("\"/data/results.csv\""));
+    }
+
+    // Fake adapter for testing the TargetAdapter trait
+
+    struct FakeAdapter {
+        target_id: &'static str,
+        scenarios: Vec<ScenarioRef>,
+    }
+
+    impl FakeAdapter {
+        fn new() -> Self {
+            Self {
+                target_id: "fake_adapter",
+                scenarios: vec![
+                    ScenarioRef {
+                        name: "scenario_a".to_string(),
+                        description: Some("Scenario A".to_string()),
+                    },
+                    ScenarioRef {
+                        name: "scenario_b".to_string(),
+                        description: None,
+                    },
+                ],
+            }
+        }
+    }
+
+    impl TargetAdapter for FakeAdapter {
+        fn id(&self) -> &'static str {
+            self.target_id
+        }
+
+        fn discover_scenarios(&self) -> Vec<ScenarioRef> {
+            self.scenarios.clone()
+        }
+
+        fn prepare(
+            &self,
+            ctx: &AdapterContext,
+            spec: &ScenarioSpec,
+        ) -> Result<PreparedRun> {
+            Ok(PreparedRun {
+                strategy: LaunchStrategy::ManagedProcess {
+                    command: CommandSpec::new(ctx.app_root.join("bin/target")),
+                    background: true,
+                },
+                expected_window: None,
+                trace_source: TraceSource::None,
+                import_sources: vec![],
+            })
+        }
+
+        fn launch(
+            &self,
+            ctx: &AdapterContext,
+            prepared: &PreparedRun,
+        ) -> Result<LaunchedRun> {
+            Ok(LaunchedRun {
+                pid: Some(42),
+                window_id: None,
+                command: prepared.strategy.default_command(),
+                env: BTreeMap::new(),
+            })
+        }
+
+        fn collect(
+            &self,
+            ctx: &AdapterContext,
+            run: &LaunchedRun,
+        ) -> Result<CollectedData> {
+            Ok(CollectedData::default())
+        }
+
+        fn stop(&self, ctx: &AdapterContext, run: &LaunchedRun) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    impl LaunchStrategy {
+        fn default_command(&self) -> CommandSpec {
+            match self {
+                LaunchStrategy::ExistingWindow { .. } => CommandSpec::default(),
+                LaunchStrategy::ManagedProcess { command, .. } => command.clone(),
+                LaunchStrategy::AutonomousProcess { command, .. } => command.clone(),
+            }
+        }
+    }
+
+    #[test]
+    fn target_adapter_trait_id() {
+        let adapter = FakeAdapter::new();
+        assert_eq!(adapter.id(), "fake_adapter");
+    }
+
+    #[test]
+    fn target_adapter_discover_scenarios() {
+        let adapter = FakeAdapter::new();
+        let scenarios = adapter.discover_scenarios();
+        assert_eq!(scenarios.len(), 2);
+        assert!(scenarios.iter().any(|s| s.name == "scenario_a"));
+        assert!(scenarios.iter().any(|s| s.name == "scenario_b"));
+    }
+
+    #[test]
+    fn target_adapter_supports_scenario() {
+        let adapter = FakeAdapter::new();
+        assert!(adapter.supports_scenario("scenario_a"));
+        assert!(adapter.supports_scenario("scenario_b"));
+        assert!(!adapter.supports_scenario("unknown_scenario"));
+    }
+
+    #[test]
+    fn target_adapter_prepare() {
+        let adapter = FakeAdapter::new();
+        let ctx = AdapterContext::new(
+            PathBuf::from("/test/app"),
+            PathBuf::from("/test/output"),
+            serde_json::json!({}),
+        );
+        let spec = ScenarioSpec {
+            name: "scenario_a".to_string(),
+            config: serde_json::json!({}),
+        };
+
+        let prepared = adapter.prepare(&ctx, &spec).unwrap();
+        assert!(matches!(
+            prepared.strategy,
+            LaunchStrategy::ManagedProcess { .. }
+        ));
+    }
+
+    #[test]
+    fn target_adapter_launch() {
+        let adapter = FakeAdapter::new();
+        let ctx = AdapterContext::new(
+            PathBuf::from("/test/app"),
+            PathBuf::from("/test/output"),
+            serde_json::json!({}),
+        );
+        let prepared = PreparedRun::default();
+
+        let launched = adapter.launch(&ctx, &prepared).unwrap();
+        assert_eq!(launched.pid, Some(42));
+    }
+
+    #[test]
+    fn target_adapter_collect() {
+        let adapter = FakeAdapter::new();
+        let ctx = AdapterContext::new(
+            PathBuf::from("/test/app"),
+            PathBuf::from("/test/output"),
+            serde_json::json!({}),
+        );
+        let run = LaunchedRun {
+            pid: Some(42),
+            window_id: None,
+            command: CommandSpec::default(),
+            env: BTreeMap::new(),
+        };
+
+        let collected = adapter.collect(&ctx, &run).unwrap();
+        assert!(collected.measurements.is_empty());
+        assert!(collected.events.is_empty());
+    }
+
+    #[test]
+    fn target_adapter_stop() {
+        let adapter = FakeAdapter::new();
+        let ctx = AdapterContext::new(
+            PathBuf::from("/test/app"),
+            PathBuf::from("/test/output"),
+            serde_json::json!({}),
+        );
+        let run = LaunchedRun {
+            pid: Some(42),
+            window_id: None,
+            command: CommandSpec::default(),
+            env: BTreeMap::new(),
+        };
+
+        let result = adapter.stop(&ctx, &run);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn target_adapter_lifecycle() {
+        // Integration test covering the full lifecycle
+        let adapter = FakeAdapter::new();
+        let ctx = AdapterContext::new(
+            PathBuf::from("/test/app"),
+            PathBuf::from("/test/output"),
+            serde_json::json!({}),
+        );
+        let spec = ScenarioSpec {
+            name: "scenario_a".to_string(),
+            config: serde_json::json!({}),
+        };
+
+        // prepare
+        let prepared = adapter.prepare(&ctx, &spec).unwrap();
+
+        // launch
+        let launched = adapter.launch(&ctx, &prepared).unwrap();
+        assert!(launched.pid.is_some());
+
+        // collect
+        let collected = adapter.collect(&ctx, &launched).unwrap();
+        assert!(collected.trace_fields.is_empty());
+
+        // stop
+        let result = adapter.stop(&ctx, &launched);
+        assert!(result.is_ok());
     }
 }

@@ -252,11 +252,25 @@ Each target app should implement a common adapter trait.
 
 ```rust
 pub trait TargetAdapter: Send + Sync {
+    /// Returns the unique identifier for this adapter (e.g., "rust_chatbot").
     fn id(&self) -> &'static str;
-    fn discover_scenarios(&self, ctx: &AdapterContext) -> anyhow::Result<Vec<ScenarioRef>>;
-    fn prepare(&self, ctx: &AdapterContext, scenario: &ScenarioSpec) -> anyhow::Result<PreparedRun>;
+
+    /// Discovers available scenarios for this adapter.
+    fn discover_scenarios(&self) -> Vec<ScenarioRef>;
+
+    /// Validates that a scenario name is valid for this adapter.
+    fn supports_scenario(&self, scenario: &str) -> bool;
+
+    /// Prepares a run for the given scenario.
+    fn prepare(&self, ctx: &AdapterContext, spec: &ScenarioSpec) -> anyhow::Result<PreparedRun>;
+
+    /// Launches a prepared run.
     fn launch(&self, ctx: &AdapterContext, prepared: &PreparedRun) -> anyhow::Result<LaunchedRun>;
+
+    /// Collects data from a completed or failed run.
     fn collect(&self, ctx: &AdapterContext, run: &LaunchedRun) -> anyhow::Result<CollectedData>;
+
+    /// Stops a running scenario.
     fn stop(&self, ctx: &AdapterContext, run: &LaunchedRun) -> anyhow::Result<()>;
 }
 ```
@@ -264,6 +278,53 @@ pub trait TargetAdapter: Send + Sync {
 Supporting types:
 
 ```rust
+pub struct AdapterContext {
+    pub app_root: std::path::PathBuf,
+    pub output_dir: std::path::PathBuf,
+    pub config: serde_json::Value,
+}
+
+pub struct ScenarioRef {
+    pub name: String,
+    pub description: Option<String>,
+}
+
+pub struct ScenarioSpec {
+    pub name: String,
+    pub config: serde_json::Value,
+}
+
+pub struct LaunchedRun {
+    pub pid: Option<u32>,
+    pub window_id: Option<String>,
+    pub command: CommandSpec,
+    pub env: std::collections::BTreeMap<String, String>,
+}
+
+pub struct CollectedData {
+    pub measurements: Vec<Measurement>,
+    pub events: Vec<Event>,
+    pub trace_fields: TraceFields,
+    pub artifacts: Vec<ArtifactRef>,
+}
+
+pub struct Measurement {
+    pub name: String,
+    pub value: f64,
+    pub unit: Option<String>,
+}
+
+pub struct Event {
+    pub timestamp: String,
+    pub kind: String,
+    pub message: Option<String>,
+}
+
+pub struct ArtifactRef {
+    pub kind: String,
+    pub path: String,
+}
+
 pub enum WindowSelector {
     Pid { value: u32 },
     Title { value: String },
