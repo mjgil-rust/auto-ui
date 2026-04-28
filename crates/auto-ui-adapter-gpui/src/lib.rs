@@ -122,7 +122,11 @@ pub fn scenario_names() -> &'static [&'static str] {
 pub fn validate_named_scenario(scenario: &str, value: &Value) -> Result<()> {
     match normalize_name(scenario).as_str() {
         "scroll_matrix" => {
-            scroll_matrix_config_from_scenario(value.clone(), None)?;
+            let config = scroll_matrix_config_from_scenario(value.clone(), None)?;
+            // Validate that variants is not empty
+            if config.variants.is_empty() {
+                bail!("At least one variant is required for scroll_matrix.");
+            }
             Ok(())
         }
         "scrollbar_trace" => {
@@ -699,6 +703,7 @@ fn conversation_paint_config_from_scenario(
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ScrollMatrixScenarioFile {
     output_dir: Option<String>,
     app: Option<GpuiApp>,
@@ -707,6 +712,7 @@ struct ScrollMatrixScenarioFile {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ScrollbarTraceScenarioFile {
     output_dir: Option<String>,
     app: Option<GpuiApp>,
@@ -715,6 +721,7 @@ struct ScrollbarTraceScenarioFile {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ConversationPaintScenarioFile {
     output_dir: Option<String>,
     app: Option<GpuiApp>,
@@ -723,12 +730,14 @@ struct ConversationPaintScenarioFile {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct GpuiApp {
     root: Option<String>,
     example: Option<String>,
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ScrollMatrixBench {
     variants: Option<Vec<String>>,
     run_ms: Option<u64>,
@@ -739,6 +748,7 @@ struct ScrollMatrixBench {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ScrollbarTraceSection {
     run_ms: Option<u64>,
     warmup_ms: Option<u64>,
@@ -748,6 +758,7 @@ struct ScrollbarTraceSection {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ConversationBenchSection {
     threads: Option<Vec<usize>>,
     run_ms: Option<u64>,
@@ -756,6 +767,7 @@ struct ConversationBenchSection {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct GpuiCapture {
     capture_window: Option<bool>,
     settle_ms: Option<u64>,

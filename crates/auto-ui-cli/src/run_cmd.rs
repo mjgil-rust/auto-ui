@@ -176,4 +176,19 @@ mod tests {
             .to_string();
         assert!(err.contains("width") || err.contains("required"));
     }
+
+    #[test]
+    fn scroll_matrix_scenario_rejects_empty_variants() {
+        // Empty variants should fail validation since at least one variant is required
+        let value = serde_json::json!({
+            "bench": {
+                "variants": [],
+                "run_ms": 5000
+            }
+        });
+        let err = validate_selected_scenario("gpui_component_testing", "scroll_matrix", &value)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("variant") || err.contains("required"));
+    }
 }
