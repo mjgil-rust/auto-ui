@@ -107,12 +107,28 @@ impl InteractiveWindowOrchestrator {
         Self::default()
     }
 
+    /// Validates that a window_id is non-empty and appears valid.
+    ///
+    /// This is a basic validation. Real implementations should verify
+    /// the window actually exists and is responsive.
+    fn validate_window_id(window_id: &str) -> Result<()> {
+        if window_id.is_empty() {
+            bail!("window_id cannot be empty");
+        }
+        if window_id.len() < 3 {
+            bail!("window_id '{}' appears invalid (too short)", window_id);
+        }
+        Ok(())
+    }
+
     /// Attaches to a window (existing or just launched).
     ///
     /// Returns the window state that can be used for later restoration.
     pub fn attach_to_window(&self, window_id: &str) -> Result<WindowState> {
+        Self::validate_window_id(window_id)?;
+
         // In a full implementation, this would query the window driver
-        // for the current geometry and z-order
+        // for the current geometry and z-order and verify the window exists
         let geometry = WindowGeometry {
             x: 0,
             y: 0,
@@ -129,11 +145,14 @@ impl InteractiveWindowOrchestrator {
 
     /// Resizes a window to the given dimensions.
     pub fn resize_window(&self, window_id: &str, width: u32, height: u32) -> Result<WindowGeometry> {
+        Self::validate_window_id(window_id)?;
+
         if self.config.window_selector == WindowSelector::Active {
             bail!("cannot resize window: no window selector specified");
         }
 
         // In a full implementation, this would call the window driver
+        // and verify the window still exists before and after resize
         Ok(WindowGeometry {
             x: 0,
             y: 0,
@@ -144,29 +163,41 @@ impl InteractiveWindowOrchestrator {
 
     /// Activates (brings to front) a window.
     pub fn activate_window(&self, window_id: &str) -> Result<()> {
+        Self::validate_window_id(window_id)?;
+
         if self.config.window_selector == WindowSelector::Active {
             bail!("cannot activate window: no window selector specified");
         }
 
         // In a full implementation, this would call the window driver
+        // and verify the window accepts focus
         Ok(())
     }
 
     /// Lowers a window (sends to back).
     pub fn lower_window(&self, window_id: &str) -> Result<()> {
+        Self::validate_window_id(window_id)?;
+
         // In a full implementation, this would call the window driver
+        // and verify the window was successfully lowered
         Ok(())
     }
 
     /// Captures a screenshot of a window.
     pub fn screenshot_window(&self, window_id: &str, output_path: &PathBuf) -> Result<()> {
+        Self::validate_window_id(window_id)?;
+
         // In a full implementation, this would call the window driver
+        // and verify the window is still present for capture
         Ok(())
     }
 
     /// Restores window state after manipulation.
     pub fn restore_window_state(&self, window_id: &str, state: &WindowState) -> Result<()> {
+        Self::validate_window_id(window_id)?;
+
         // In a full implementation, this would restore geometry and z-order
+        // and verify the window accepts the restored state
         Ok(())
     }
 
@@ -287,6 +318,26 @@ mod tests {
 
         let result = orchestrator.lower_window("0x12345678");
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn lower_window_rejects_empty_id() {
+        let config = InteractiveOrchestrationConfig::default();
+        let orchestrator = InteractiveWindowOrchestrator::new(config);
+
+        let result = orchestrator.lower_window("");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("empty"));
+    }
+
+    #[test]
+    fn lower_window_rejects_short_id() {
+        let config = InteractiveOrchestrationConfig::default();
+        let orchestrator = InteractiveWindowOrchestrator::new(config);
+
+        let result = orchestrator.lower_window("ab");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("too short"));
     }
 
     #[test]
