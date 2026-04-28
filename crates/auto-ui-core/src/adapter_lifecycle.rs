@@ -433,4 +433,61 @@ mod tests {
         assert!(result.cleanup_called);
         assert!(result.cleanup_error.is_some());
     }
+
+    // Adapter that fails on both collect and stop phases
+    struct FailCollectAndStopAdapter;
+
+    impl TargetAdapter for FailCollectAndStopAdapter {
+        fn id(&self) -> &'static str {
+            "fail_collect_and_stop"
+        }
+
+        fn discover_scenarios(&self) -> Vec<ScenarioRef> {
+            vec![ScenarioRef { name: "test".to_string(), description: None }]
+        }
+
+        fn prepare(
+            &self,
+            _ctx: &AdapterContext,
+            _spec: &ScenarioSpec,
+        ) -> Result<PreparedRun> {
+            Ok(PreparedRun::default())
+        }
+
+        fn launch(&self, _ctx: &AdapterContext, _prepared: &PreparedRun) -> Result<LaunchedRun> {
+            Ok(LaunchedRun {
+                pid: Some(1),
+                window_id: None,
+                command: CommandSpec::default(),
+                env: std::collections::BTreeMap::new(),
+            })
+        }
+
+        fn collect(&self, _ctx: &AdapterContext, _run: &LaunchedRun) -> Result<CollectedData> {
+            bail!("collect failed")
+        }
+
+        fn stop(&self, _ctx: &AdapterContext, _run: &LaunchedRun) -> Result<()> {
+            bail!("stop also failed")
+        }
+    }
+
+    #[test]
+    fn lifecycle_result_preserves_error_when_cleanup_fails() {
+        // When both the main operation fails AND cleanup fails,
+        // the original error is preserved and cleanup error is captured separately
+        let adapter = FailCollectAndStopAdapter;
+        let ctx = test_ctx();
+        let spec = test_spec();
+
+        let result = run_lifecycle(&adapter, &ctx, &spec);
+        // Main operation failed
+        assert!(!result.is_success());
+        // Cleanup was called
+        assert!(result.cleanup_called);
+        // Both errors should be preserved
+        assert!(result.cleanup_error.is_some());
+        let cleanup_err = result.cleanup_error.unwrap();
+        assert!(cleanup_err.contains("stop also failed"));
+    }
 }
