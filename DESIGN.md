@@ -162,29 +162,32 @@ Owns the execution model:
 Key types:
 
 ```rust
-pub struct RunRequest {
-    pub target: String,
-    pub scenario: String,
-    pub app_root: std::path::PathBuf,
-    pub output_dir: std::path::PathBuf,
-    pub mode: ExecutionMode,
-    pub widths: Vec<u32>,
-    pub height: u32,
-    pub keep_front: bool,
+pub enum ExecutionMode {
+    StartupDriven,     // Harness launches target, waits for completion
+    InteractiveWindow,  // Harness manages interactive window
+    Hybrid,            // Startup launch + interactive window management
 }
 
-pub enum ExecutionMode {
-    StartupDriven,
-    InteractiveWindow,
-    Hybrid,
+pub enum RunStatus {
+    Pending,
+    Running,
+    Completed,
+    Error,
+}
+
+pub struct RunRequest {
+    pub target: String,           // Target identifier (e.g., "rust_chatbot")
+    pub scenario: String,        // Scenario name (e.g., "debug", "scroll_matrix")
+    pub execution_mode: ExecutionMode,
+    pub output_dir: Option<String>,
+    pub config: serde_json::Value,  // Additional scenario-specific config
 }
 
 pub struct RunResult {
-    pub run_id: String,
-    pub started_at: chrono::DateTime<chrono::Utc>,
-    pub finished_at: chrono::DateTime<chrono::Utc>,
-    pub artifacts: Vec<ArtifactRef>,
     pub status: RunStatus,
+    pub output_dir: std::path::PathBuf,
+    pub report_path: std::path::PathBuf,
+    pub error: Option<String>,   // Present only if status is Error
 }
 ```
 
