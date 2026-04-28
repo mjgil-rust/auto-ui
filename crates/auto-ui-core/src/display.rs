@@ -92,6 +92,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore = "requires Xvfb and openbox installed"]
     fn find_free_display_returns_colon_prefixed_number() {
         let display = find_free_display().expect("should find a free display");
         assert!(display.starts_with(':'), "display must start with ':'");
@@ -100,6 +101,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires Xvfb and openbox installed"]
     fn headless_display_starts_and_sets_env() {
         let hd = HeadlessDisplay::start("800x600x24").expect("headless display should start");
         let display = hd.display().to_string();
