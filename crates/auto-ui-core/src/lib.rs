@@ -1,3 +1,4 @@
+mod adapter_lifecycle;
 mod display;
 mod adapter_registry;
 mod startup_orchestration;
@@ -22,6 +23,9 @@ pub type TraceFields = BTreeMap<String, String>;
 pub const AUTO_UI_LAUNCH_BACKGROUND_ENV: &str = "AUTO_UI_LAUNCH_BACKGROUND";
 
 pub use adapter_registry::{AdapterRegistry, RegisteredAdapter};
+pub use adapter_lifecycle::{
+    run_lifecycle, run_lifecycle_collect, LifecycleError, LifecycleReporter, LifecycleResult,
+};
 pub use startup_orchestration::{run_startup_scenario, StartupOrchestrationConfig, StartupOrchestrator};
 pub use interactive_window_orchestration::{
     InteractiveOrchestrationConfig, InteractiveWindowOrchestrator, WindowGeometry, WindowState,
