@@ -1,4 +1,5 @@
 mod display;
+mod adapter_registry;
 
 use std::collections::BTreeMap;
 use std::env;
@@ -16,6 +17,8 @@ pub use display::HeadlessDisplay;
 
 pub type TraceFields = BTreeMap<String, String>;
 pub const AUTO_UI_LAUNCH_BACKGROUND_ENV: &str = "AUTO_UI_LAUNCH_BACKGROUND";
+
+pub use adapter_registry::{AdapterRegistry, RegisteredAdapter};
 
 pub struct CommandOutput {
     pub stdout: String,
