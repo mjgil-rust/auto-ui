@@ -662,6 +662,38 @@ provider = "codex"
         let _ = fs::remove_file(path);
     }
 
+    #[test]
+    fn parse_widths_empty_string() {
+        let result = parse_widths("").unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn parse_widths_single_value() {
+        let result = parse_widths("800").unwrap();
+        assert_eq!(result, vec![800]);
+    }
+
+    #[test]
+    fn parse_widths_multiple_values() {
+        let result = parse_widths("800, 1024, 1280").unwrap();
+        assert_eq!(result, vec![800, 1024, 1280]);
+    }
+
+    #[test]
+    fn parse_widths_with_whitespace() {
+        let result = parse_widths(" 800 , 1024 , 1280 ").unwrap();
+        assert_eq!(result, vec![800, 1024, 1280]);
+    }
+
+    #[test]
+    fn parse_widths_invalid_value() {
+        let result = parse_widths("800,abc,1280");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("invalid width"));
+    }
+
     // Tests for shared run types (Task #4)
 
     #[test]
