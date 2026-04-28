@@ -427,6 +427,7 @@ pub fn run_debug(config: DebugConfig) -> Result<CompletedRun> {
         Some("rust-chatbot trace log".to_string()),
         Value::Null,
     );
+    let output_dir_for_error_report = output_dir.clone();
     let result = (|| -> Result<CompletedRun> {
         for width in &widths {
             let mut session_entries = Vec::new();
@@ -559,6 +560,16 @@ pub fn run_debug(config: DebugConfig) -> Result<CompletedRun> {
         })
     })();
 
+    // Write report on failure (success path writes it inside the closure)
+    if result.is_err() {
+        if let Err(err) = write_report(&output_dir_for_error_report, &report) {
+            let _ = log_line(
+                format!("warning: failed to write error report: {err:#}"),
+                Some(&progress_path),
+            );
+        }
+    }
+
     if let Some((existing_window_id, geometry)) = restore_window_geometry {
         let restore_result = restore_reused_window(
             &existing_window_id,
@@ -673,7 +684,7 @@ pub fn run_header_debug(config: HeaderDebugConfig) -> Result<CompletedRun> {
         Some("rust-chatbot trace log".to_string()),
         Value::Null,
     );
-
+    let output_dir_for_error_report = output_dir.clone();
     let result = (|| -> Result<CompletedRun> {
         let (new_pid, window_id) = launch_targeted_session_window(
             &app_root,
@@ -942,6 +953,16 @@ pub fn run_header_debug(config: HeaderDebugConfig) -> Result<CompletedRun> {
         })
     })();
 
+    // Write report on failure (success path writes it inside the closure)
+    if result.is_err() {
+        if let Err(err) = write_report(&output_dir_for_error_report, &report) {
+            let _ = log_line(
+                format!("warning: failed to write error report: {err:#}"),
+                Some(&progress_path),
+            );
+        }
+    }
+
     if let Some(launched_pid) = launched_pid {
         stop_chatbot_pid(&app_root, launched_pid)?;
         wait_for_pid_exit(&app_root, launched_pid, seconds(config.window_timeout))?;
@@ -986,6 +1007,14 @@ pub fn run_prompt_debug(config: PromptDebugConfig) -> Result<CompletedRun> {
     )?;
 
     let mut launched_pid = None;
+    let mut report = Report::new(TARGET_ID, "prompt_debug", "hybrid", &app_root);
+    report.add_artifact(
+        "progress_log",
+        progress_path.display().to_string(),
+        Some("live progress log".to_string()),
+        Value::Null,
+    );
+    let output_dir_for_error_report = output_dir.clone();
     let result = (|| -> Result<CompletedRun> {
         let (new_pid, window_id) = launch_targeted_session_window(
             &app_root,
@@ -1040,7 +1069,6 @@ pub fn run_prompt_debug(config: PromptDebugConfig) -> Result<CompletedRun> {
         ));
         x11::capture_window_screenshot(&window_id, &screenshot_path)?;
 
-        let mut report = Report::new(TARGET_ID, "prompt_debug", "hybrid", &app_root);
         report.add_artifact(
             "progress_log",
             progress_path.display().to_string(),
@@ -1084,6 +1112,16 @@ pub fn run_prompt_debug(config: PromptDebugConfig) -> Result<CompletedRun> {
             report_path,
         })
     })();
+
+    // Write report on failure (success path writes it inside the closure)
+    if result.is_err() {
+        if let Err(err) = write_report(&output_dir_for_error_report, &report) {
+            let _ = log_line(
+                format!("warning: failed to write error report: {err:#}"),
+                Some(&progress_path),
+            );
+        }
+    }
 
     if let Some(launched_pid) = launched_pid {
         let _ = stop_chatbot_pid(&app_root, launched_pid);

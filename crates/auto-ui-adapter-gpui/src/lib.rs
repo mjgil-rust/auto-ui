@@ -196,122 +196,136 @@ pub fn run_scroll_matrix(config: ScrollMatrixConfig) -> Result<CompletedRun> {
     );
 
     let mut summary_rows = Vec::new();
+    let output_dir_for_report = output_dir.clone();
+    let result = (|| -> Result<CompletedRun> {
+        for variant in &config.variants {
+            let csv_path = output_dir.join(format!("{variant}.frames.csv"));
+            let stdout_path = output_dir.join(format!("{variant}.stdout.log"));
+            let stderr_path = output_dir.join(format!("{variant}.stderr.log"));
+            let screenshot_path = output_dir.join(format!("{variant}.window.png"));
+            let window_title = format!("{} - {}", config.window_title_prefix, variant);
+            let duration_ms = config.warmup_ms + config.run_ms + 2_000;
 
-    for variant in &config.variants {
-        let csv_path = output_dir.join(format!("{variant}.frames.csv"));
-        let stdout_path = output_dir.join(format!("{variant}.stdout.log"));
-        let stderr_path = output_dir.join(format!("{variant}.stderr.log"));
-        let screenshot_path = output_dir.join(format!("{variant}.window.png"));
-        let window_title = format!("{} - {}", config.window_title_prefix, variant);
-        let duration_ms = config.warmup_ms + config.run_ms + 2_000;
+            log_line(
+                format!("running variant={variant} duration_ms={duration_ms}"),
+                Some(&progress_path),
+            )?;
 
-        log_line(
-            format!("running variant={variant} duration_ms={duration_ms}"),
-            Some(&progress_path),
-        )?;
+            let mut command = Command::new(&binary);
+            command.current_dir(&app_root);
+            request_background_launch(&mut command);
+            command.env("BENCH_VARIANT", variant);
+            command.env("BENCH_OUTPUT", &csv_path);
+            command.env("BENCH_DURATION_MS", duration_ms.to_string());
+            command.env("BENCH_AUTO_SCROLL", "1");
+            command.env("BENCH_SCROLL_WARMUP_MS", config.warmup_ms.to_string());
+            command.env("BENCH_SCROLL_TICK_MS", config.scroll_delay_ms.to_string());
+            command.env("BENCH_SCROLL_STEP_PX", config.scroll_step_px.to_string());
+            command.env("BENCH_WINDOW_TITLE", &window_title);
 
-        let mut command = Command::new(&binary);
-        command.current_dir(&app_root);
-        request_background_launch(&mut command);
-        command.env("BENCH_VARIANT", variant);
-        command.env("BENCH_OUTPUT", &csv_path);
-        command.env("BENCH_DURATION_MS", duration_ms.to_string());
-        command.env("BENCH_AUTO_SCROLL", "1");
-        command.env("BENCH_SCROLL_WARMUP_MS", config.warmup_ms.to_string());
-        command.env("BENCH_SCROLL_TICK_MS", config.scroll_delay_ms.to_string());
-        command.env("BENCH_SCROLL_STEP_PX", config.scroll_step_px.to_string());
-        command.env("BENCH_WINDOW_TITLE", &window_title);
+            run_process_with_optional_capture(
+                command,
+                &stdout_path,
+                &stderr_path,
+                config.capture_window,
+                config.settle_ms,
+                Some(window_title.as_str()),
+                Some(&screenshot_path),
+            )?;
 
-        run_process_with_optional_capture(
-            command,
-            &stdout_path,
-            &stderr_path,
-            config.capture_window,
-            config.settle_ms,
-            Some(window_title.as_str()),
-            Some(&screenshot_path),
-        )?;
-
-        let summary = summarize_scroll_matrix_csv(&csv_path, config.warmup_ms)?;
-        report.push_measurement(json!({
-            "variant": variant,
-            "samples": summary.samples,
-            "avg_frame_ms": summary.avg_frame_ms,
-            "p50_frame_ms": summary.p50_frame_ms,
-            "p95_frame_ms": summary.p95_frame_ms,
-            "p99_frame_ms": summary.p99_frame_ms,
-            "p95_content_ms": summary.p95_content_ms,
-            "p95_prepaint_ms": summary.p95_prepaint_ms,
-            "over_16ms": summary.over_16ms,
-            "over_33ms": summary.over_33ms,
-            "over_100ms": summary.over_100ms,
-        }));
-        report.add_artifact(
-            "gpui_csv",
-            csv_path.display().to_string(),
-            Some(format!("scroll matrix csv for {variant}")),
-            json!({ "variant": variant }),
-        );
-        report.add_artifact(
-            "stdout_log",
-            stdout_path.display().to_string(),
-            Some(format!("stdout for {variant}")),
-            json!({ "variant": variant }),
-        );
-        report.add_artifact(
-            "stderr_log",
-            stderr_path.display().to_string(),
-            Some(format!("stderr for {variant}")),
-            json!({ "variant": variant }),
-        );
-        if config.capture_window && screenshot_path.exists() {
+            let summary = summarize_scroll_matrix_csv(&csv_path, config.warmup_ms)?;
+            report.push_measurement(json!({
+                "variant": variant,
+                "samples": summary.samples,
+                "avg_frame_ms": summary.avg_frame_ms,
+                "p50_frame_ms": summary.p50_frame_ms,
+                "p95_frame_ms": summary.p95_frame_ms,
+                "p99_frame_ms": summary.p99_frame_ms,
+                "p95_content_ms": summary.p95_content_ms,
+                "p95_prepaint_ms": summary.p95_prepaint_ms,
+                "over_16ms": summary.over_16ms,
+                "over_33ms": summary.over_33ms,
+                "over_100ms": summary.over_100ms,
+            }));
             report.add_artifact(
-                "window_screenshot",
-                screenshot_path.display().to_string(),
-                Some(format!("window screenshot for {variant}")),
+                "gpui_csv",
+                csv_path.display().to_string(),
+                Some(format!("scroll matrix csv for {variant}")),
                 json!({ "variant": variant }),
             );
+            report.add_artifact(
+                "stdout_log",
+                stdout_path.display().to_string(),
+                Some(format!("stdout for {variant}")),
+                json!({ "variant": variant }),
+            );
+            report.add_artifact(
+                "stderr_log",
+                stderr_path.display().to_string(),
+                Some(format!("stderr for {variant}")),
+                json!({ "variant": variant }),
+            );
+            if config.capture_window && screenshot_path.exists() {
+                report.add_artifact(
+                    "window_screenshot",
+                    screenshot_path.display().to_string(),
+                    Some(format!("window screenshot for {variant}")),
+                    json!({ "variant": variant }),
+                );
+            }
+            summary_rows.push((variant.clone(), summary));
         }
-        summary_rows.push((variant.clone(), summary));
+
+        let summary_tsv = output_dir.join("summary.tsv");
+        let summary_md = output_dir.join("summary.md");
+        write_scroll_matrix_summary_tsv(&summary_tsv, &summary_rows)?;
+        write_scroll_matrix_summary(&summary_md, &summary_rows, &config)?;
+        report.add_artifact(
+            "summary_tsv",
+            summary_tsv.display().to_string(),
+            Some("scroll matrix summary table".to_string()),
+            Value::Null,
+        );
+        report.add_artifact(
+            "summary_markdown",
+            summary_md.display().to_string(),
+            Some("scroll matrix summary".to_string()),
+            Value::Null,
+        );
+        report.set_details(json!({
+            "example": config.example,
+            "variants": config.variants,
+            "run_ms": config.run_ms,
+            "warmup_ms": config.warmup_ms,
+            "scroll_delay_ms": config.scroll_delay_ms,
+            "scroll_step_px": config.scroll_step_px,
+        }));
+        report.finish_ok();
+        let report_path = write_report(&output_dir, &report)?;
+
+        println!("wrote {}", report_path.display());
+        println!("\nartifacts:");
+        println!("  progress: {}", progress_path.display());
+        println!("  summary: {}", summary_md.display());
+        println!("  report: {}", report_path.display());
+
+        Ok(CompletedRun {
+            output_dir,
+            report_path,
+        })
+    })();
+
+    // Write report on failure (success path writes it inside the closure)
+    if result.is_err() {
+        if let Err(err) = write_report(&output_dir_for_report, &report) {
+            let _ = log_line(
+                format!("warning: failed to write error report: {err:#}"),
+                Some(&progress_path),
+            );
+        }
     }
 
-    let summary_tsv = output_dir.join("summary.tsv");
-    let summary_md = output_dir.join("summary.md");
-    write_scroll_matrix_summary_tsv(&summary_tsv, &summary_rows)?;
-    write_scroll_matrix_summary(&summary_md, &summary_rows, &config)?;
-    report.add_artifact(
-        "summary_tsv",
-        summary_tsv.display().to_string(),
-        Some("scroll matrix summary table".to_string()),
-        Value::Null,
-    );
-    report.add_artifact(
-        "summary_markdown",
-        summary_md.display().to_string(),
-        Some("scroll matrix summary".to_string()),
-        Value::Null,
-    );
-    report.set_details(json!({
-        "example": config.example,
-        "variants": config.variants,
-        "run_ms": config.run_ms,
-        "warmup_ms": config.warmup_ms,
-        "scroll_delay_ms": config.scroll_delay_ms,
-        "scroll_step_px": config.scroll_step_px,
-    }));
-    report.finish_ok();
-    let report_path = write_report(&output_dir, &report)?;
-
-    println!("wrote {}", report_path.display());
-    println!("\nartifacts:");
-    println!("  progress: {}", progress_path.display());
-    println!("  summary: {}", summary_md.display());
-    println!("  report: {}", report_path.display());
-
-    Ok(CompletedRun {
-        output_dir,
-        report_path,
-    })
+    result
 }
 
 pub fn run_scrollbar_trace(config: ScrollbarTraceConfig) -> Result<CompletedRun> {
@@ -341,39 +355,6 @@ pub fn run_scrollbar_trace(config: ScrollbarTraceConfig) -> Result<CompletedRun>
     let summary_md = output_dir.join("summary.md");
     let duration_ms = config.warmup_ms + config.run_ms + 1_500;
 
-    let mut command = Command::new(&binary);
-    command.current_dir(&app_root);
-    request_background_launch(&mut command);
-    command.env("GPUI_COMPONENT_SCROLLBAR_TRACE", "1");
-    command.env("SCROLLBAR_DEMO_AUTO_SCROLL", "1");
-    command.env("SCROLLBAR_DEMO_DURATION_MS", duration_ms.to_string());
-    command.env(
-        "SCROLLBAR_DEMO_SCROLL_WARMUP_MS",
-        config.warmup_ms.to_string(),
-    );
-    command.env(
-        "SCROLLBAR_DEMO_SCROLL_TICK_MS",
-        config.scroll_delay_ms.to_string(),
-    );
-    command.env(
-        "SCROLLBAR_DEMO_SCROLL_STEP_PX",
-        config.scroll_step_px.to_string(),
-    );
-    command.env("SCROLLBAR_DEMO_WINDOW_TITLE", &config.window_title);
-
-    run_process_with_optional_capture(
-        command,
-        &stdout_path,
-        &stderr_path,
-        config.capture_window,
-        config.settle_ms,
-        Some(config.window_title.as_str()),
-        Some(&screenshot_path),
-    )?;
-
-    let summary = summarize_scrollbar_stderr(&stderr_path)?;
-    write_scrollbar_summary(&summary_md, &summary, &config)?;
-
     let mut report = Report::new(TARGET_ID, "scrollbar_trace", "startup_driven", &app_root);
     report.add_artifact(
         "progress_log",
@@ -381,59 +362,108 @@ pub fn run_scrollbar_trace(config: ScrollbarTraceConfig) -> Result<CompletedRun>
         Some("live progress log".to_string()),
         Value::Null,
     );
-    report.add_artifact(
-        "stdout_log",
-        stdout_path.display().to_string(),
-        Some("scrollbar demo stdout".to_string()),
-        Value::Null,
-    );
-    report.add_artifact(
-        "stderr_log",
-        stderr_path.display().to_string(),
-        Some("scrollbar demo stderr".to_string()),
-        Value::Null,
-    );
-    report.add_artifact(
-        "summary_markdown",
-        summary_md.display().to_string(),
-        Some("scrollbar trace summary".to_string()),
-        Value::Null,
-    );
-    if config.capture_window && screenshot_path.exists() {
+
+    let output_dir_for_report = output_dir.clone();
+    let result = (|| -> Result<CompletedRun> {
+        let mut command = Command::new(&binary);
+        command.current_dir(&app_root);
+        request_background_launch(&mut command);
+        command.env("GPUI_COMPONENT_SCROLLBAR_TRACE", "1");
+        command.env("SCROLLBAR_DEMO_AUTO_SCROLL", "1");
+        command.env("SCROLLBAR_DEMO_DURATION_MS", duration_ms.to_string());
+        command.env(
+            "SCROLLBAR_DEMO_SCROLL_WARMUP_MS",
+            config.warmup_ms.to_string(),
+        );
+        command.env(
+            "SCROLLBAR_DEMO_SCROLL_TICK_MS",
+            config.scroll_delay_ms.to_string(),
+        );
+        command.env(
+            "SCROLLBAR_DEMO_SCROLL_STEP_PX",
+            config.scroll_step_px.to_string(),
+        );
+        command.env("SCROLLBAR_DEMO_WINDOW_TITLE", &config.window_title);
+
+        run_process_with_optional_capture(
+            command,
+            &stdout_path,
+            &stderr_path,
+            config.capture_window,
+            config.settle_ms,
+            Some(config.window_title.as_str()),
+            Some(&screenshot_path),
+        )?;
+
+        let summary = summarize_scrollbar_stderr(&stderr_path)?;
+        write_scrollbar_summary(&summary_md, &summary, &config)?;
+
         report.add_artifact(
-            "window_screenshot",
-            screenshot_path.display().to_string(),
-            Some("scrollbar trace screenshot".to_string()),
+            "stdout_log",
+            stdout_path.display().to_string(),
+            Some("scrollbar demo stdout".to_string()),
             Value::Null,
         );
+        report.add_artifact(
+            "stderr_log",
+            stderr_path.display().to_string(),
+            Some("scrollbar demo stderr".to_string()),
+            Value::Null,
+        );
+        report.add_artifact(
+            "summary_markdown",
+            summary_md.display().to_string(),
+            Some("scrollbar trace summary".to_string()),
+            Value::Null,
+        );
+        if config.capture_window && screenshot_path.exists() {
+            report.add_artifact(
+                "window_screenshot",
+                screenshot_path.display().to_string(),
+                Some("scrollbar trace screenshot".to_string()),
+                Value::Null,
+            );
+        }
+        report.push_measurement(json!({
+            "trace_lines": summary.total_lines,
+            "zero_states": summary.zero_states,
+            "nonzero_states": summary.nonzero_states,
+        }));
+        report.set_details(json!({
+            "example": config.example,
+            "run_ms": config.run_ms,
+            "warmup_ms": config.warmup_ms,
+            "scroll_delay_ms": config.scroll_delay_ms,
+            "scroll_step_px": config.scroll_step_px,
+            "window_title": config.window_title,
+            "last_trace_line": summary.last_line,
+        }));
+        report.finish_ok();
+        let report_path = write_report(&output_dir, &report)?;
+
+        println!("wrote {}", report_path.display());
+        println!("\nartifacts:");
+        println!("  progress: {}", progress_path.display());
+        println!("  summary: {}", summary_md.display());
+        println!("  report: {}", report_path.display());
+
+        Ok(CompletedRun {
+            output_dir,
+            report_path,
+        })
+    })();
+
+    // Write report on failure (success path writes it inside the closure)
+    if result.is_err() {
+        if let Err(err) = write_report(&output_dir_for_report, &report) {
+            let _ = log_line(
+                format!("warning: failed to write error report: {err:#}"),
+                Some(&progress_path),
+            );
+        }
     }
-    report.push_measurement(json!({
-        "trace_lines": summary.total_lines,
-        "zero_states": summary.zero_states,
-        "nonzero_states": summary.nonzero_states,
-    }));
-    report.set_details(json!({
-        "example": config.example,
-        "run_ms": config.run_ms,
-        "warmup_ms": config.warmup_ms,
-        "scroll_delay_ms": config.scroll_delay_ms,
-        "scroll_step_px": config.scroll_step_px,
-        "window_title": config.window_title,
-        "last_trace_line": summary.last_line,
-    }));
-    report.finish_ok();
-    let report_path = write_report(&output_dir, &report)?;
 
-    println!("wrote {}", report_path.display());
-    println!("\nartifacts:");
-    println!("  progress: {}", progress_path.display());
-    println!("  summary: {}", summary_md.display());
-    println!("  report: {}", report_path.display());
-
-    Ok(CompletedRun {
-        output_dir,
-        report_path,
-    })
+    result
 }
 
 pub fn run_conversation_paint(config: ConversationPaintConfig) -> Result<CompletedRun> {
@@ -468,122 +498,136 @@ pub fn run_conversation_paint(config: ConversationPaintConfig) -> Result<Complet
     );
 
     let mut summary_rows = Vec::new();
+    let output_dir_for_error_report = output_dir.clone();
+    let result = (|| -> Result<CompletedRun> {
+        for thread_id in &config.threads {
+            let thread_key = conversation_thread_key(*thread_id);
+            let csv_path = output_dir.join(format!("{thread_key}.frames.csv"));
+            let stdout_path = output_dir.join(format!("{thread_key}.stdout.log"));
+            let stderr_path = output_dir.join(format!("{thread_key}.stderr.log"));
+            let screenshot_path = output_dir.join(format!("{thread_key}.window.png"));
+            let window_title = format!("{} - {}", config.window_title_prefix, thread_key);
 
-    for thread_id in &config.threads {
-        let thread_key = conversation_thread_key(*thread_id);
-        let csv_path = output_dir.join(format!("{thread_key}.frames.csv"));
-        let stdout_path = output_dir.join(format!("{thread_key}.stdout.log"));
-        let stderr_path = output_dir.join(format!("{thread_key}.stderr.log"));
-        let screenshot_path = output_dir.join(format!("{thread_key}.window.png"));
-        let window_title = format!("{} - {}", config.window_title_prefix, thread_key);
+            log_line(
+                format!("running thread={} duration_ms={}", thread_id, config.run_ms),
+                Some(&progress_path),
+            )?;
 
-        log_line(
-            format!("running thread={} duration_ms={}", thread_id, config.run_ms),
-            Some(&progress_path),
-        )?;
+            let mut command = Command::new(&binary);
+            command.current_dir(&app_root);
+            request_background_launch(&mut command);
+            command.env("BENCH_OUTPUT", &csv_path);
+            command.env("BENCH_DURATION_MS", config.run_ms.to_string());
+            command.env("BENCH_THREAD", thread_id.to_string());
+            command.env(
+                "BENCH_DEFER_FIRST_FRAME",
+                if config.defer_first_frame { "1" } else { "0" },
+            );
+            command.env("BENCH_WINDOW_TITLE", &window_title);
 
-        let mut command = Command::new(&binary);
-        command.current_dir(&app_root);
-        request_background_launch(&mut command);
-        command.env("BENCH_OUTPUT", &csv_path);
-        command.env("BENCH_DURATION_MS", config.run_ms.to_string());
-        command.env("BENCH_THREAD", thread_id.to_string());
-        command.env(
-            "BENCH_DEFER_FIRST_FRAME",
-            if config.defer_first_frame { "1" } else { "0" },
-        );
-        command.env("BENCH_WINDOW_TITLE", &window_title);
+            run_process_with_optional_capture(
+                command,
+                &stdout_path,
+                &stderr_path,
+                config.capture_window,
+                config.settle_ms,
+                Some(window_title.as_str()),
+                Some(&screenshot_path),
+            )?;
 
-        run_process_with_optional_capture(
-            command,
-            &stdout_path,
-            &stderr_path,
-            config.capture_window,
-            config.settle_ms,
-            Some(window_title.as_str()),
-            Some(&screenshot_path),
-        )?;
-
-        let summary = summarize_conversation_csv(&csv_path)?;
-        let label = conversation_thread_label(*thread_id);
-        report.push_measurement(json!({
-            "thread_id": thread_id,
-            "label": label,
-            "samples": summary.samples,
-            "avg_render_ms": summary.avg_render_ms,
-            "p50_render_ms": summary.p50_render_ms,
-            "p95_render_ms": summary.p95_render_ms,
-            "p99_render_ms": summary.p99_render_ms,
-            "p95_messages_ms": summary.p95_messages_ms,
-            "p95_prepaint_latency_ms": summary.p95_prepaint_latency_ms,
-            "p95_message_max_ms": summary.p95_message_max_ms,
-            "over_16ms": summary.over_16ms,
-            "over_33ms": summary.over_33ms,
-        }));
-        report.add_artifact(
-            "gpui_csv",
-            csv_path.display().to_string(),
-            Some(format!("conversation paint csv for thread {}", thread_id)),
-            json!({ "thread_id": thread_id, "label": label }),
-        );
-        report.add_artifact(
-            "stdout_log",
-            stdout_path.display().to_string(),
-            Some(format!("stdout for thread {}", thread_id)),
-            json!({ "thread_id": thread_id, "label": label }),
-        );
-        report.add_artifact(
-            "stderr_log",
-            stderr_path.display().to_string(),
-            Some(format!("stderr for thread {}", thread_id)),
-            json!({ "thread_id": thread_id, "label": label }),
-        );
-        if config.capture_window && screenshot_path.exists() {
+            let summary = summarize_conversation_csv(&csv_path)?;
+            let label = conversation_thread_label(*thread_id);
+            report.push_measurement(json!({
+                "thread_id": thread_id,
+                "label": label,
+                "samples": summary.samples,
+                "avg_render_ms": summary.avg_render_ms,
+                "p50_render_ms": summary.p50_render_ms,
+                "p95_render_ms": summary.p95_render_ms,
+                "p99_render_ms": summary.p99_render_ms,
+                "p95_messages_ms": summary.p95_messages_ms,
+                "p95_prepaint_latency_ms": summary.p95_prepaint_latency_ms,
+                "p95_message_max_ms": summary.p95_message_max_ms,
+                "over_16ms": summary.over_16ms,
+                "over_33ms": summary.over_33ms,
+            }));
             report.add_artifact(
-                "window_screenshot",
-                screenshot_path.display().to_string(),
-                Some(format!("window screenshot for thread {}", thread_id)),
+                "gpui_csv",
+                csv_path.display().to_string(),
+                Some(format!("conversation paint csv for thread {}", thread_id)),
                 json!({ "thread_id": thread_id, "label": label }),
             );
+            report.add_artifact(
+                "stdout_log",
+                stdout_path.display().to_string(),
+                Some(format!("stdout for thread {}", thread_id)),
+                json!({ "thread_id": thread_id, "label": label }),
+            );
+            report.add_artifact(
+                "stderr_log",
+                stderr_path.display().to_string(),
+                Some(format!("stderr for thread {}", thread_id)),
+                json!({ "thread_id": thread_id, "label": label }),
+            );
+            if config.capture_window && screenshot_path.exists() {
+                report.add_artifact(
+                    "window_screenshot",
+                    screenshot_path.display().to_string(),
+                    Some(format!("window screenshot for thread {}", thread_id)),
+                    json!({ "thread_id": thread_id, "label": label }),
+                );
+            }
+            summary_rows.push((thread_key, *thread_id, summary));
         }
-        summary_rows.push((thread_key, *thread_id, summary));
+
+        let summary_tsv = output_dir.join("summary.tsv");
+        let summary_md = output_dir.join("summary.md");
+        write_conversation_summary_tsv(&summary_tsv, &summary_rows)?;
+        write_conversation_summary(&summary_md, &summary_rows, &config)?;
+        report.add_artifact(
+            "summary_tsv",
+            summary_tsv.display().to_string(),
+            Some("conversation paint summary table".to_string()),
+            Value::Null,
+        );
+        report.add_artifact(
+            "summary_markdown",
+            summary_md.display().to_string(),
+            Some("conversation paint summary".to_string()),
+            Value::Null,
+        );
+        report.set_details(json!({
+            "example": config.example,
+            "threads": config.threads,
+            "run_ms": config.run_ms,
+            "defer_first_frame": config.defer_first_frame,
+        }));
+        report.finish_ok();
+        let report_path = write_report(&output_dir, &report)?;
+
+        println!("wrote {}", report_path.display());
+        println!("\nartifacts:");
+        println!("  progress: {}", progress_path.display());
+        println!("  summary: {}", summary_md.display());
+        println!("  report: {}", report_path.display());
+
+        Ok(CompletedRun {
+            output_dir,
+            report_path,
+        })
+    })();
+
+    // Write report on failure (success path writes it inside the closure)
+    if result.is_err() {
+        if let Err(err) = write_report(&output_dir_for_error_report, &report) {
+            let _ = log_line(
+                format!("warning: failed to write error report: {err:#}"),
+                Some(&progress_path),
+            );
+        }
     }
 
-    let summary_tsv = output_dir.join("summary.tsv");
-    let summary_md = output_dir.join("summary.md");
-    write_conversation_summary_tsv(&summary_tsv, &summary_rows)?;
-    write_conversation_summary(&summary_md, &summary_rows, &config)?;
-    report.add_artifact(
-        "summary_tsv",
-        summary_tsv.display().to_string(),
-        Some("conversation paint summary table".to_string()),
-        Value::Null,
-    );
-    report.add_artifact(
-        "summary_markdown",
-        summary_md.display().to_string(),
-        Some("conversation paint summary".to_string()),
-        Value::Null,
-    );
-    report.set_details(json!({
-        "example": config.example,
-        "threads": config.threads,
-        "run_ms": config.run_ms,
-        "defer_first_frame": config.defer_first_frame,
-    }));
-    report.finish_ok();
-    let report_path = write_report(&output_dir, &report)?;
-
-    println!("wrote {}", report_path.display());
-    println!("\nartifacts:");
-    println!("  progress: {}", progress_path.display());
-    println!("  summary: {}", summary_md.display());
-    println!("  report: {}", report_path.display());
-
-    Ok(CompletedRun {
-        output_dir,
-        report_path,
-    })
+    result
 }
 
 fn resolve_app_root(raw_path: Option<&str>) -> Result<PathBuf> {

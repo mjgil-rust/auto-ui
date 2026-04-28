@@ -341,6 +341,30 @@ mod tests {
     }
 
     #[test]
+    fn write_report_on_error_status_includes_error_details() {
+        let output_dir = unique_temp_dir("report-error");
+        fs::create_dir_all(&output_dir).unwrap();
+
+        let mut report = Report::new("rust_chatbot", "debug", "hybrid", Path::new("/tmp/app"));
+        report.finish_error("trace timeout after 30s");
+        report.push_measurement(json!({"error": "timeout"}));
+
+        let path = write_report(&output_dir, &report).unwrap();
+
+        let written: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(written.get("status").and_then(Value::as_str), Some("error"));
+        assert_eq!(
+            written.get("status_message").and_then(Value::as_str),
+            Some("trace timeout after 30s")
+        );
+        assert!(written.get("finished_at").is_some());
+        assert!(written.get("measurements").and_then(Value::as_array).is_some());
+
+        let _ = fs::remove_file(path);
+        let _ = fs::remove_dir(output_dir);
+    }
+
+    #[test]
     fn report_schema_declares_required_top_level_fields() {
         let schema = report_schema_json();
         let required = schema
