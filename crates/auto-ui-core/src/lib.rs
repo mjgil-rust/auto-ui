@@ -1,6 +1,7 @@
 mod adapter_lifecycle;
 mod display;
 mod adapter_registry;
+pub mod errors;
 mod startup_orchestration;
 mod interactive_window_orchestration;
 mod hybrid_orchestration;
@@ -25,6 +26,11 @@ pub const AUTO_UI_LAUNCH_BACKGROUND_ENV: &str = "AUTO_UI_LAUNCH_BACKGROUND";
 pub use adapter_registry::{AdapterRegistry, RegisteredAdapter};
 pub use adapter_lifecycle::{
     run_lifecycle, run_lifecycle_collect, LifecycleError, LifecycleReporter, LifecycleResult,
+};
+pub use errors::{
+    ArtifactMissingError, BinaryNotFoundError, DisplayError, PathExpansionError,
+    ProcessExitedError, ReportSerializationError, ScenarioValidationError, TargetRootError,
+    TraceTimeoutError, WindowNotFoundError, WindowOperationError,
 };
 pub use startup_orchestration::{run_startup_scenario, StartupOrchestrationConfig, StartupOrchestrator};
 pub use interactive_window_orchestration::{
