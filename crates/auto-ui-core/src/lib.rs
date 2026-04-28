@@ -536,9 +536,12 @@ pub fn build_output_dir(output_dir: Option<&str>, prefix: &str) -> Result<PathBu
             repo_root().join(output_dir)
         }
     } else {
+        // Use nanoseconds to ensure uniqueness even in same second
+        let now = Local::now();
+        let nanos = now.timestamp_subsec_nanos();
         repo_root()
             .join("tmp")
-            .join(format!("{prefix}-{}", Local::now().format("%Y%m%d-%H%M%S")))
+            .join(format!("{prefix}-{}-{}", now.format("%Y%m%d-%H%M%S"), nanos))
     };
     fs::create_dir_all(&path).with_context(|| format!("failed to create {}", path.display()))?;
     path.canonicalize()
@@ -700,6 +703,33 @@ provider = "codex"
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(err.contains("invalid width"));
+    }
+
+    #[test]
+    fn build_output_dir_uses_nanoseconds_for_uniqueness() {
+        // Creating multiple output dirs in quick succession should produce unique paths
+        let dir1 = build_output_dir(None, "test").unwrap();
+        let dir2 = build_output_dir(None, "test").unwrap();
+        let dir3 = build_output_dir(None, "test").unwrap();
+
+        // All paths should be unique
+        assert_ne!(dir1, dir2);
+        assert_ne!(dir2, dir3);
+        assert_ne!(dir1, dir3);
+
+        // Each should contain nanoseconds in the path
+        let nanos1 = dir1.file_name().unwrap().to_str().unwrap();
+        let nanos2 = dir2.file_name().unwrap().to_str().unwrap();
+        let nanos3 = dir3.file_name().unwrap().to_str().unwrap();
+
+        // Verify all three are different (nanoseconds differ)
+        assert_ne!(nanos1, nanos2);
+        assert_ne!(nanos2, nanos3);
+
+        // Clean up
+        fs::remove_dir_all(&dir1).ok();
+        fs::remove_dir_all(&dir2).ok();
+        fs::remove_dir_all(&dir3).ok();
     }
 
     // Tests for shared run types (Task #4)
