@@ -161,4 +161,19 @@ mod tests {
             .to_string();
         assert!(err.contains("unknown") || err.contains("Unknown"));
     }
+
+    #[test]
+    fn debug_scenario_rejects_empty_widths() {
+        // Empty widths should fail validation since at least one width is required
+        let value = serde_json::json!({
+            "window": {
+                "widths": [],
+                "height": 900
+            }
+        });
+        let err = validate_selected_scenario("rust_chatbot", "debug", &value)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("width") || err.contains("required"));
+    }
 }

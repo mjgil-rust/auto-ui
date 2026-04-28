@@ -219,7 +219,11 @@ pub fn scenario_names() -> &'static [&'static str] {
 pub fn validate_named_scenario(scenario: &str, value: &Value) -> Result<()> {
     match normalize_name(scenario).as_str() {
         "debug" => {
-            debug_config_from_scenario(value.clone(), None)?;
+            let config = debug_config_from_scenario(value.clone(), None)?;
+            // Validate that widths is not empty (at least one width is required)
+            if config.widths.is_empty() {
+                bail!("At least one width is required.");
+            }
             Ok(())
         }
         "header_debug" => {
