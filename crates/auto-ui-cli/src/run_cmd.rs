@@ -148,4 +148,17 @@ mod tests {
         assert!(err.contains("rust_chatbot"));
         assert!(err.contains("gpui_component_testing"));
     }
+
+    #[test]
+    fn debug_scenario_rejects_unknown_fields() {
+        // Using unknown_field instead of a valid field to trigger deny_unknown_fields
+        let value = serde_json::json!({
+            "app": { "root": "/test" },
+            "unknown_extra_field": "should cause error"
+        });
+        let err = validate_selected_scenario("rust_chatbot", "debug", &value)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("unknown") || err.contains("Unknown"));
+    }
 }

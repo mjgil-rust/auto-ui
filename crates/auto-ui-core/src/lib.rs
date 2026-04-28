@@ -571,11 +571,19 @@ pub fn parse_scenario_file(path: &Path) -> Result<ScenarioFile> {
         .and_then(Value::as_str)
         .map(ToOwned::to_owned);
 
+    // Strip top-level metadata fields that are not adapter-specific config
+    let mut adapter_value = json_value.clone();
+    adapter_value.as_object_mut().map(|obj| {
+        obj.remove("target");
+        obj.remove("scenario");
+        obj.remove("output_dir");
+    });
+
     Ok(ScenarioFile {
         target,
         scenario,
         output_dir,
-        value: json_value,
+        value: adapter_value,
     })
 }
 

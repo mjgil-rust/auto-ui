@@ -1193,6 +1193,7 @@ fn prompt_debug_config_from_scenario(
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct DebugScenarioFile {
     output_dir: Option<String>,
     app: Option<DebugScenarioApp>,
@@ -1201,6 +1202,7 @@ struct DebugScenarioFile {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct HeaderScenarioFile {
     output_dir: Option<String>,
     app: Option<HeaderScenarioApp>,
@@ -1210,6 +1212,7 @@ struct HeaderScenarioFile {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct PromptDebugScenarioFile {
     output_dir: Option<String>,
     app: Option<PromptDebugScenarioApp>,
