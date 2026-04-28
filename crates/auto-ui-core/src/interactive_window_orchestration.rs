@@ -335,6 +335,44 @@ mod tests {
     }
 
     #[test]
+    fn run_interactive_scenario_with_default_config_lowers_window() {
+        // Default config: keep_front=false (windows should be lowered)
+        let config = InteractiveOrchestrationConfig::default();
+        let orchestrator = InteractiveWindowOrchestrator::new(config);
+
+        let launched = LaunchedRun {
+            pid: Some(1234),
+            window_id: Some("0x12345678".to_string()),
+            command: CommandSpec::new("/bin/test"),
+            env: BTreeMap::new(),
+        };
+
+        // With default config (keep_front=false), run_interactive_scenario should succeed
+        // and call lower_window (not activate_window)
+        let result = orchestrator.run_interactive_scenario(&launched);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn run_interactive_scenario_with_keep_front_true_and_active_selector_fails() {
+        // keep_front=true with Active selector should fail on activate
+        let config = InteractiveOrchestrationConfig::default()
+            .with_keep_front(true); // keep_front=true but selector is Active (default)
+        let orchestrator = InteractiveWindowOrchestrator::new(config);
+
+        let launched = LaunchedRun {
+            pid: Some(1234),
+            window_id: Some("0x12345678".to_string()),
+            command: CommandSpec::new("/bin/test"),
+            env: BTreeMap::new(),
+        };
+
+        let result = orchestrator.run_interactive_scenario(&launched);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("no window selector"));
+    }
+
+    #[test]
     fn run_interactive_scenario_with_window() {
         let config = InteractiveOrchestrationConfig::default()
             .with_window_selector(WindowSelector::Pid { value: 1234 })
