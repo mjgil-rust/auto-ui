@@ -3,9 +3,11 @@
 //! This module provides utilities for ensuring proper cleanup of adapter resources
 //! even when errors occur during the launch process.
 
+use std::path::Path;
+
 use anyhow::Result;
 
-use crate::{AdapterContext, CollectedData, LaunchedRun, TargetAdapter};
+use crate::{AdapterContext, CollectedData, LaunchedRun, TargetAdapter, log_line};
 
 /// Result of an adapter lifecycle operation.
 ///
@@ -73,13 +75,19 @@ pub fn run_lifecycle<A: TargetAdapter>(
 ) -> LifecycleResult<(LaunchedRun, CollectedData)> {
     // Phase 1: Prepare
     let prepared = match adapter.prepare(ctx, spec) {
-        Ok(p) => p,
+        Ok(p) => {
+            log_line(format!("[LIFECYCLE] {} prepared", adapter.id()), None::<&Path>).ok();
+            p
+        }
         Err(e) => return LifecycleResult::failure(e),
     };
 
     // Phase 2: Launch with cleanup guarantee
     let launched = match adapter.launch(ctx, &prepared) {
-        Ok(l) => l,
+        Ok(l) => {
+            log_line(format!("[LIFECYCLE] {} launched (pid={:?})", adapter.id(), l.pid), None::<&Path>).ok();
+            l
+        }
         Err(e) => {
             // Launch failed - still try to clean up
             let cleanup_result = run_cleanup(adapter, ctx, None);
@@ -93,7 +101,10 @@ pub fn run_lifecycle<A: TargetAdapter>(
 
     // Phase 3: Collect
     let collected = match adapter.collect(ctx, &launched) {
-        Ok(c) => c,
+        Ok(c) => {
+            log_line(format!("[LIFECYCLE] {} collected", adapter.id()), None::<&Path>).ok();
+            c
+        }
         Err(e) => {
             // Collect failed - clean up and preserve original error
             let cleanup_result = run_cleanup(adapter, ctx, Some(&launched));
@@ -107,6 +118,7 @@ pub fn run_lifecycle<A: TargetAdapter>(
 
     // Phase 4: Stop (normal cleanup)
     let cleanup_result = run_cleanup(adapter, ctx, Some(&launched));
+    log_line(format!("[LIFECYCLE] {} stopped", adapter.id()), None::<&Path>).ok();
 
     LifecycleResult {
         result: Ok((launched, collected)),
