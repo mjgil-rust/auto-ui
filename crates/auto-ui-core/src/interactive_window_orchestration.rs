@@ -236,6 +236,9 @@ impl InteractiveWindowOrchestrator {
             self.lower_window(window_id)?;
         }
 
+        // Restore original state if we modified the window
+        self.restore_window_state(window_id, &initial_state)?;
+
         Ok(initial_state)
     }
 }
@@ -440,6 +443,31 @@ mod tests {
 
         let result = orchestrator.run_interactive_scenario(&launched);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn run_interactive_scenario_restores_geometry() {
+        // Test that run_interactive_scenario restores geometry after modifications
+        let config = InteractiveOrchestrationConfig::default()
+            .with_window_selector(WindowSelector::Pid { value: 1234 })
+            .with_geometry(1024, 768);
+        let orchestrator = InteractiveWindowOrchestrator::new(config);
+
+        let launched = LaunchedRun {
+            pid: Some(1234),
+            window_id: Some("0x12345678".to_string()),
+            command: CommandSpec::new("/bin/test"),
+            env: BTreeMap::new(),
+        };
+
+        let result = orchestrator.run_interactive_scenario(&launched);
+        assert!(result.is_ok());
+
+        // The returned state should match what attach_to_window returned
+        // (which is the initial state before any modifications)
+        let returned_state = result.unwrap();
+        assert_eq!(returned_state.geometry.width, 800);
+        assert_eq!(returned_state.geometry.height, 600);
     }
 
     #[test]
