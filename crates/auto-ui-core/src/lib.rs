@@ -2,6 +2,7 @@ mod display;
 mod adapter_registry;
 mod startup_orchestration;
 mod interactive_window_orchestration;
+mod hybrid_orchestration;
 
 use std::collections::BTreeMap;
 use std::env;
@@ -25,6 +26,7 @@ pub use startup_orchestration::{run_startup_scenario, StartupOrchestrationConfig
 pub use interactive_window_orchestration::{
     InteractiveOrchestrationConfig, InteractiveWindowOrchestrator, WindowGeometry, WindowState,
 };
+pub use hybrid_orchestration::{HybridOrchestrationConfig, HybridOrchestrator};
 
 pub struct CommandOutput {
     pub stdout: String,
