@@ -67,6 +67,7 @@ pub struct ScenarioFile {
     pub version: String,
     pub target: String,
     pub scenario: String,
+    pub mode: Option<ExecutionMode>,
     pub output_dir: Option<String>,
     pub value: Value,
 }
@@ -630,12 +631,26 @@ pub fn parse_scenario_file(path: &Path) -> Result<ScenarioFile> {
         .and_then(Value::as_str)
         .map(ToOwned::to_owned);
 
+    let mode = match json_value.get("mode").and_then(Value::as_str) {
+        Some(s) => {
+            let normalized = normalize_name(s);
+            match normalized.as_str() {
+                "startup_driven" => Some(ExecutionMode::StartupDriven),
+                "interactive_window" => Some(ExecutionMode::InteractiveWindow),
+                "hybrid" => Some(ExecutionMode::Hybrid),
+                other => anyhow::bail!("unknown execution mode: {other}"),
+            }
+        }
+        None => None,
+    };
+
     // Strip top-level metadata fields that are not adapter-specific config
     let mut adapter_value = json_value.clone();
     adapter_value.as_object_mut().map(|obj| {
         obj.remove("version");
         obj.remove("target");
         obj.remove("scenario");
+        obj.remove("mode");
         obj.remove("output_dir");
     });
 
@@ -643,6 +658,7 @@ pub fn parse_scenario_file(path: &Path) -> Result<ScenarioFile> {
         version,
         target,
         scenario,
+        mode,
         output_dir,
         value: adapter_value,
     })
@@ -739,6 +755,57 @@ scenario = "debug"
         assert!(err.contains("scenario format version"));
         assert!(err.contains("999"));
         assert!(err.contains("supported"));
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn parse_scenario_file_reads_mode_field() {
+        let path = unique_temp_path("with-mode");
+        fs::write(
+            &path,
+            r#"
+version = "1"
+target = "rust_chatbot"
+scenario = "debug"
+mode = "hybrid"
+"#,
+        )
+        .unwrap();
+
+        let scenario = parse_scenario_file(&path).unwrap();
+        assert_eq!(scenario.mode, Some(ExecutionMode::Hybrid));
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn parse_scenario_file_defaults_mode_to_none() {
+        let path = unique_temp_path("no-mode");
+        fs::write(&path, "target = \"rust_chatbot\"\nscenario = \"debug\"\n").unwrap();
+
+        let scenario = parse_scenario_file(&path).unwrap();
+        assert!(scenario.mode.is_none());
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn parse_scenario_file_rejects_invalid_mode() {
+        let path = unique_temp_path("invalid-mode");
+        fs::write(
+            &path,
+            r#"
+version = "1"
+target = "rust_chatbot"
+scenario = "debug"
+mode = "super_fast_mode"
+"#,
+        )
+        .unwrap();
+
+        let err = parse_scenario_file(&path).unwrap_err().to_string();
+        assert!(err.contains("unknown execution mode"));
 
         let _ = fs::remove_file(path);
     }
