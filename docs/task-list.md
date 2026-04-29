@@ -199,13 +199,13 @@ Based on the uploaded repo and design/backlog files, I treated **“full complet
 | No. task                                                                          | Status     | Required tests before Complete                                                                  | Required documentation before Complete |
 | --------------------------------------------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------- | -------------------------------------- |
 | 150. Keep target-app builds outside the core automation loop by default           | Complete   | Tests should ensure runs fail clearly when binaries are missing rather than building implicitly | README/DESIGN build policy docs        |
-| 151. Add optional adapter `build_hint` support                                    | Incomplete | Tests that hints are displayed but not executed by default                                      | Build policy docs                      |
+| 151. Add optional adapter `build_hint` support                                    | Complete   | Tests that hints are displayed but not executed by default                                      | Build policy docs                      |
 | 152. Decide whether build integration remains permanently out-of-process          | Incomplete | Decision does not require code tests unless implemented                                         | DESIGN decision record                 |
 | 153. Decide whether `auto-ui` remains repo-local or becomes installable/published | Incomplete | Packaging smoke test if installable path is chosen                                              | Packaging docs                         |
 | 154. Add release packaging guidance                                               | Incomplete | Release packaging smoke test or checklist                                                       | Release docs                           |
 | 155. Add pinned dependency/setup guidance for Linux hosts                         | Incomplete | Docs validation/checklist; optional dependency detection tests                                  | Setup docs                             |
-| 156. Add package/tool install guidance for X11 and ImageMagick dependencies       | Incomplete | Tool availability tests                                                                         | README/setup docs                      |
-| 157. Add versioning policy for report schema and CLI compatibility                | Incomplete | Schema-version tests                                                                            | REPORT_SCHEMA.md/versioning docs       |
+| 156. Add package/tool install guidance for X11 and ImageMagick dependencies       | Complete   | Tool availability tests                                                                         | README/setup docs                      |
+| 157. Add versioning policy for report schema and CLI compatibility                | Complete   | Schema-version tests                                                                            | REPORT_SCHEMA.md/versioning docs       |
 
 ## Documentation and open decisions
 
