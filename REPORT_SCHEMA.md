@@ -31,6 +31,20 @@ target/debug/auto-ui report-schema > report.schema.json
 - `events`: timeline rows. Adapters may add keys inside each row.
 - `details`: adapter-specific structured JSON that stays nested instead of promoting every target-specific field to the top level.
 
+### Details Field Policy
+
+Adapter-specific fields must remain under `details` rather than being promoted to top-level report fields. This policy ensures:
+
+1. **Schema stability**: Top-level fields are reserved for fields shared across all targets.
+2. **Forward compatibility**: New adapter-specific fields don't require schema version bumps.
+3. **Clear boundaries**: Target-specific data is clearly delineated.
+
+Examples of appropriate `details` content:
+- rust-chatbot: `provider`, `widths`, `height`, `session_id`
+- GPUI: `variants`, `run_ms`, `window_title`
+
+The `details` field is never `null` - it's always at minimum an empty object `{}` when no adapter-specific data is present.
+
 ## Event Rows
 
 Each `events[]` entry has a `kind` field identifying the event type and a `timestamp` in RFC 3339 format. Adapters may add extra keys per event type.
