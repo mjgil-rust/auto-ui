@@ -78,7 +78,7 @@ Based on the uploaded repo and design/backlog files, I treated **“full complet
 | 57. Gate or ignore the current headless display test that requires Xvfb/openbox                                     | Complete   | Two display tests marked `#[ignore]` with clear opt-in message                              | Test docs must explain headless opt-in                             |
 | 58. Include launch command, selected env overrides, and current directory in progress logs                          | Incomplete | Log snapshot/unit tests with redaction rules if needed                   | Observability docs must describe logged launch details             |
 | 59. Add CLI-level structured log mode, including optional JSON logs                                                 | Complete   | Tests for plain and JSON log output                                      | README must document log mode                                      |
-| 60. Add clear command failure summaries that point to progress log, stderr log, and report path                     | Incomplete | CLI failure-output tests                                                 | Troubleshooting docs                                               |
+| 60. Add clear command failure summaries that point to progress log, stderr log, and report path                     | Complete   | CLI failure-output tests                                                 | Troubleshooting docs                                               |
 
 ## rust-chatbot adapter
 
