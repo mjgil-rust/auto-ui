@@ -2212,6 +2212,58 @@ exit 0
     }
 
     #[test]
+    fn scroll_matrix_capture_window_registers_screenshot_artifact() {
+        // When capture_window=true and screenshot file exists, window_screenshot should be registered
+        let temp = unique_temp_dir("artifact-scroll-matrix-screenshot");
+        let output_dir = temp.join("output");
+        std::fs::create_dir_all(&output_dir).unwrap();
+
+        // Create fake GPUI binary
+        let _fake_bin = create_fake_gpui_binary(&temp, "fake_scroll_matrix", "scroll_matrix");
+
+        // Pre-create a screenshot file at the expected path
+        let screenshot_path = output_dir.join("a.window.png");
+        std::fs::write(&screenshot_path, "fake screenshot data").unwrap();
+
+        let config = ScrollMatrixConfig {
+            app_root: Some(temp.to_str().unwrap().to_string()),
+            example: "fake_scroll_matrix".to_string(),
+            variants: vec!["a".to_string()],
+            run_ms: 100,
+            warmup_ms: 50,
+            scroll_delay_ms: 16,
+            scroll_step_px: 40,
+            output_dir: Some(output_dir.to_str().unwrap().to_string()),
+            capture_window: true,
+            settle_ms: 100,
+            window_title_prefix: "Test".to_string(),
+            timeout_ms: Some(5000),
+            command: None,
+            command_env: None,
+            command_cwd: None,
+        };
+
+        let completed =
+            run_scroll_matrix(config).expect("run_scroll_matrix should succeed");
+
+        // Read the report and verify window_screenshot artifact is registered
+        let report = read_report_artifacts(&completed.report_path);
+        let artifacts: Vec<_> = report["artifacts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| a["kind"].as_str().unwrap())
+            .collect();
+
+        assert!(
+            artifacts.contains(&"window_screenshot"),
+            "should have window_screenshot artifact when capture_window=true and file exists"
+        );
+
+        std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[test]
     fn parse_command_string_extracts_path_and_args() {
         // Create a real executable to test parsing
         use std::os::unix::fs::PermissionsExt;
