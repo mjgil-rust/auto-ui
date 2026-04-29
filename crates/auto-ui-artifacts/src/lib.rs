@@ -88,6 +88,68 @@ impl Report {
         self.events.push(value);
     }
 
+    /// Adds a lifecycle event (prepare, launch, collect, stop, etc.).
+    pub fn push_lifecycle_event(&mut self, phase: &str, message: &str) {
+        self.events.push(json!({
+            "timestamp": Utc::now().to_rfc3339(),
+            "kind": "lifecycle",
+            "phase": phase,
+            "message": message,
+        }));
+    }
+
+    /// Adds a retry event when an operation is retried.
+    pub fn push_retry_event(&mut self, operation: &str, attempt: u32, max_attempts: u32) {
+        self.events.push(json!({
+            "timestamp": Utc::now().to_rfc3339(),
+            "kind": "retry",
+            "operation": operation,
+            "attempt": attempt,
+            "max_attempts": max_attempts,
+        }));
+    }
+
+    /// Adds a timeout event when an operation times out.
+    pub fn push_timeout_event(&mut self, operation: &str, timeout_secs: u64) {
+        self.events.push(json!({
+            "timestamp": Utc::now().to_rfc3339(),
+            "kind": "timeout",
+            "operation": operation,
+            "timeout_secs": timeout_secs,
+        }));
+    }
+
+    /// Adds a foreground-control event (activate, lower, etc.).
+    pub fn push_foreground_event(&mut self, action: &str, window_id: &str) {
+        self.events.push(json!({
+            "timestamp": Utc::now().to_rfc3339(),
+            "kind": "foreground_control",
+            "action": action,
+            "window_id": window_id,
+        }));
+    }
+
+    /// Adds an import event when artifacts are imported.
+    pub fn push_import_event(&mut self, artifact_kind: &str, path: &str) {
+        self.events.push(json!({
+            "timestamp": Utc::now().to_rfc3339(),
+            "kind": "import",
+            "artifact_kind": artifact_kind,
+            "path": path,
+        }));
+    }
+
+    /// Adds a window event (resize, screenshot, etc.).
+    pub fn push_window_event(&mut self, action: &str, window_id: &str, details: Value) {
+        self.events.push(json!({
+            "timestamp": Utc::now().to_rfc3339(),
+            "kind": "window",
+            "action": action,
+            "window_id": window_id,
+            "details": details,
+        }));
+    }
+
     pub fn set_details(&mut self, value: Value) {
         self.details = value;
     }
@@ -388,5 +450,91 @@ mod tests {
                 .and_then(Value::as_str),
             Some(REPORT_SCHEMA_VERSION)
         );
+    }
+
+    #[test]
+    fn push_lifecycle_event_adds_event_with_phase_and_message() {
+        let mut report = Report::new("test_target", "test_scenario", "startup_driven", Path::new("/tmp"));
+        report.push_lifecycle_event("prepare", "adapter prepared");
+        assert_eq!(report.events.len(), 1);
+        let event = &report.events[0];
+        assert_eq!(event.get("kind").and_then(Value::as_str), Some("lifecycle"));
+        assert_eq!(event.get("phase").and_then(Value::as_str), Some("prepare"));
+        assert_eq!(event.get("message").and_then(Value::as_str), Some("adapter prepared"));
+        assert!(event.get("timestamp").is_some());
+    }
+
+    #[test]
+    fn push_retry_event_adds_event_with_operation_and_attempts() {
+        let mut report = Report::new("test_target", "test_scenario", "startup_driven", Path::new("/tmp"));
+        report.push_retry_event("window_discovery", 3, 10);
+        assert_eq!(report.events.len(), 1);
+        let event = &report.events[0];
+        assert_eq!(event.get("kind").and_then(Value::as_str), Some("retry"));
+        assert_eq!(event.get("operation").and_then(Value::as_str), Some("window_discovery"));
+        assert_eq!(event.get("attempt").and_then(Value::as_u64).map(|n| n as u32), Some(3));
+        assert_eq!(event.get("max_attempts").and_then(Value::as_u64).map(|n| n as u32), Some(10));
+    }
+
+    #[test]
+    fn push_timeout_event_adds_event_with_operation_and_timeout() {
+        let mut report = Report::new("test_target", "test_scenario", "startup_driven", Path::new("/tmp"));
+        report.push_timeout_event("trace_wait", 30);
+        assert_eq!(report.events.len(), 1);
+        let event = &report.events[0];
+        assert_eq!(event.get("kind").and_then(Value::as_str), Some("timeout"));
+        assert_eq!(event.get("operation").and_then(Value::as_str), Some("trace_wait"));
+        assert_eq!(event.get("timeout_secs").and_then(Value::as_u64), Some(30));
+    }
+
+    #[test]
+    fn push_foreground_event_adds_event_with_action_and_window() {
+        let mut report = Report::new("test_target", "test_scenario", "startup_driven", Path::new("/tmp"));
+        report.push_foreground_event("lower", "0x123456");
+        assert_eq!(report.events.len(), 1);
+        let event = &report.events[0];
+        assert_eq!(event.get("kind").and_then(Value::as_str), Some("foreground_control"));
+        assert_eq!(event.get("action").and_then(Value::as_str), Some("lower"));
+        assert_eq!(event.get("window_id").and_then(Value::as_str), Some("0x123456"));
+    }
+
+    #[test]
+    fn push_import_event_adds_event_with_artifact_kind_and_path() {
+        let mut report = Report::new("test_target", "test_scenario", "startup_driven", Path::new("/tmp"));
+        report.push_import_event("progress_log", "/tmp/run/progress.log");
+        assert_eq!(report.events.len(), 1);
+        let event = &report.events[0];
+        assert_eq!(event.get("kind").and_then(Value::as_str), Some("import"));
+        assert_eq!(event.get("artifact_kind").and_then(Value::as_str), Some("progress_log"));
+        assert_eq!(event.get("path").and_then(Value::as_str), Some("/tmp/run/progress.log"));
+    }
+
+    #[test]
+    fn push_window_event_adds_event_with_action_and_details() {
+        let mut report = Report::new("test_target", "test_scenario", "startup_driven", Path::new("/tmp"));
+        let details = json!({"width": 1280, "height": 800});
+        report.push_window_event("resize", "0x789abc", details.clone());
+        assert_eq!(report.events.len(), 1);
+        let event = &report.events[0];
+        assert_eq!(event.get("kind").and_then(Value::as_str), Some("window"));
+        assert_eq!(event.get("action").and_then(Value::as_str), Some("resize"));
+        assert_eq!(event.get("window_id").and_then(Value::as_str), Some("0x789abc"));
+        let event_details = event.get("details");
+        assert_eq!(
+            serde_json::to_string(&event_details).unwrap(),
+            serde_json::to_string(&Some(details.clone())).unwrap()
+        );
+    }
+
+    #[test]
+    fn multiple_events_are_accumulated_in_order() {
+        let mut report = Report::new("test_target", "test_scenario", "startup_driven", Path::new("/tmp"));
+        report.push_lifecycle_event("prepare", "started");
+        report.push_lifecycle_event("launch", "started");
+        report.push_retry_event("discovery", 1, 5);
+        assert_eq!(report.events.len(), 3);
+        assert_eq!(report.events[0].get("phase").and_then(Value::as_str), Some("prepare"));
+        assert_eq!(report.events[1].get("phase").and_then(Value::as_str), Some("launch"));
+        assert_eq!(report.events[2].get("operation").and_then(Value::as_str), Some("discovery"));
     }
 }
