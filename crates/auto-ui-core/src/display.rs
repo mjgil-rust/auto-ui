@@ -5,6 +5,9 @@ use std::time::Duration;
 
 use anyhow::{bail, Result};
 
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
+
 pub struct HeadlessDisplay {
     xvfb: Child,
     openbox: Child,
@@ -17,7 +20,8 @@ impl HeadlessDisplay {
         let display = find_free_display()?;
         let original_display = env::var("DISPLAY").ok();
 
-        let mut xvfb = Command::new("Xvfb")
+        let mut xvfb = Command::new("Xvfb");
+        xvfb
             .args([
                 &display,
                 "-screen",
@@ -27,8 +31,14 @@ impl HeadlessDisplay {
                 "-nolisten",
                 "tcp",
             ])
+            .stdin(Stdio::null())
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
+            .stderr(Stdio::null());
+
+        #[cfg(unix)]
+        xvfb.process_group(0); // own PGID so we can kill the whole group safely
+
+        let mut xvfb = xvfb
             .spawn()
             .map_err(|e| anyhow::anyhow!("failed to start Xvfb (apt install xvfb): {e}"))?;
 
@@ -50,10 +60,17 @@ impl HeadlessDisplay {
         env::set_var("DISPLAY", &display);
         env::remove_var("XAUTHORITY");
 
-        let openbox = Command::new("openbox")
+        let mut openbox = Command::new("openbox");
+        openbox
             .arg("--sm-disable")
+            .stdin(Stdio::null())
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
+            .stderr(Stdio::null());
+
+        #[cfg(unix)]
+        openbox.process_group(0); // own PGID so we can kill the whole group safely
+
+        let mut openbox = openbox
             .spawn()
             .map_err(|e| {
                 // Clean up started Xvfb before returning error
@@ -89,38 +106,54 @@ impl Drop for HeadlessDisplay {
     fn drop(&mut self) {
         let display = self.display.clone();
 
-        // Send SIGKILL to the specific PIDs we spawned
-        fn kill_pid(pid: u32) {
+        // On Unix: kill the process group (negative PID = kill PGID).
+        // Since we spawned with process_group(0), child.id() == PGID,
+        // so -child.id() targets exactly the Xvfb/openbox group.
+        // On other platforms: kill the direct PID.
+        #[cfg(unix)]
+        fn kill_process_group(pid: u32) {
+            let pgid = -(pid as libc::pid_t);
+            unsafe {
+                libc::kill(pgid, libc::SIGTERM);
+            }
+        }
+
+        #[cfg(not(unix))]
+        fn kill_process_group(pid: u32) {
             let _ = Command::new("kill")
-                .arg("-9")
+                .arg("-TERM")
                 .arg(pid.to_string())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .status();
         }
 
-        kill_pid(self.openbox.id());
-        kill_pid(self.xvfb.id());
-
-        // Wait for each process to be reaped — wait() blocks until the OS
-        // confirms the process has exited. Use a retry loop since the process
-        // may not be immediately dead even after SIGKILL (kernel backlog).
-        fn wait_for_death(pid: u32, child: &mut Child) {
-            let deadline = std::time::Instant::now() + Duration::from_millis(200);
-            loop {
-                match child.wait() {
-                    Ok(_) => return, // Process died and was reaped
-                    Err(_) => return, // Already dead or can't wait
-                }
-                if std::time::Instant::now() >= deadline {
+        fn wait_or_kill(child: &mut std::process::Child, pgid: libc::pid_t) {
+            // Poll up to 1s for the child to exit from SIGTERM
+            for _ in 0..40 {
+                if let Ok(Some(_)) = child.try_wait() {
                     return;
                 }
-                thread::sleep(Duration::from_millis(20));
+                thread::sleep(Duration::from_millis(25));
             }
+            // Child didn't exit from SIGTERM — SIGKILL the whole group
+            unsafe {
+                libc::kill(-pgid, libc::SIGKILL);
+            }
+            let _ = child.wait();
         }
 
-        wait_for_death(self.openbox.id(), &mut self.openbox);
-        wait_for_death(self.xvfb.id(), &mut self.xvfb);
+        let openbox_pgid = self.openbox.id() as libc::pid_t;
+        let xvfb_pgid = self.xvfb.id() as libc::pid_t;
+
+        kill_process_group(self.openbox.id());
+        wait_or_kill(&mut self.openbox, openbox_pgid);
+
+        kill_process_group(self.xvfb.id());
+        wait_or_kill(&mut self.xvfb, xvfb_pgid);
+
+        // Brief pause for OS to clean up the rest of the process group
+        thread::sleep(Duration::from_millis(100));
 
         // Clean up lock file
         if display.starts_with(':') {
@@ -187,7 +220,6 @@ mod tests {
     // ============================================================
 
     #[test]
-    #[ignore = "flaky: multi-process X servers survive kill - see note above"]
     fn headless_display_kills_xvfb_on_drop() {
         // After HeadlessDisplay is dropped, Xvfb should be dead
         let hd = HeadlessDisplay::start("800x600x24").expect("headless display should start");
@@ -197,7 +229,22 @@ mod tests {
         let xvfb_pid = hd.xvfb.id();
 
         drop(hd);
-        thread::sleep(Duration::from_millis(200));
+
+        // Poll for up to 2s to observe the process actually exit
+        let mut exited = false;
+        for _ in 0..20 {
+            thread::sleep(Duration::from_millis(100));
+            let status = Command::new("kill")
+                .arg("-0")
+                .arg(xvfb_pid.to_string())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+            if !status.map(|s| s.success()).unwrap_or(false) {
+                exited = true;
+                break;
+            }
+        }
 
         // Lock file should be gone after drop
         assert!(
@@ -206,47 +253,38 @@ mod tests {
         );
 
         // Xvfb process should not be running
-        let status = Command::new("kill")
-            .arg("-0")
-            .arg(xvfb_pid.to_string())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
         assert!(
-            status.is_err(),
+            exited,
             "Xvfb process {xvfb_pid} should not be running after drop"
         );
     }
 
-    // NOTE: The "kills after drop" tests below are fundamentally unreliable
-    // in this test environment because Xvfb and openbox are multi-process
-    // applications. child.kill() sends SIGKILL to the main process but
-    // orphaned helper processes (forked children that ignore signals, or the
-    // main process in a zombie state) may survive. We cannot safely use
-    // process-group kill (-g flag) since Xvfb runs in the test process's
-    // own process group — killing it would kill the test harness itself.
-    // These tests document the expected behavior but are marked as flaky.
-
     #[test]
-    #[ignore = "flaky: multi-process X servers survive kill - see note above"]
     fn headless_display_kills_openbox_on_drop() {
         // After HeadlessDisplay is dropped, openbox should be dead
-        // Note: may be flaky if multiple tests run concurrently sharing display numbers
         let hd = HeadlessDisplay::start("800x600x24").expect("headless display should start");
         let openbox_pid = hd.openbox.id();
 
         drop(hd);
-        thread::sleep(Duration::from_millis(500));
 
-        // openbox process should not be running
-        let status = Command::new("kill")
-            .arg("-0")
-            .arg(openbox_pid.to_string())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
+        // Poll for up to 2s to observe the process actually exit
+        let mut exited = false;
+        for _ in 0..20 {
+            thread::sleep(Duration::from_millis(100));
+            let status = Command::new("kill")
+                .arg("-0")
+                .arg(openbox_pid.to_string())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+            if !status.map(|s| s.success()).unwrap_or(false) {
+                exited = true;
+                break;
+            }
+        }
+
         assert!(
-            status.is_err(),
+            exited,
             "openbox process {openbox_pid} should not be running after drop"
         );
     }
@@ -350,24 +388,31 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "flaky: multi-process X servers survive kill - see note above"]
     fn headless_display_clean_exit_code_xvfb() {
-        // Xvfb should exit cleanly (not killed by signal) when HeadlessDisplay drops
+        // Xvfb should exit cleanly when HeadlessDisplay drops
         let hd = HeadlessDisplay::start("800x600x24").expect("headless display should start");
         let xvfb_pid = hd.xvfb.id();
-        drop(hd);
-        thread::sleep(Duration::from_millis(500));
 
-        // Check if process is still running or has exited
-        // If it exits normally, wait() returns Some(status); if still running, it's still there
-        let status = Command::new("kill")
-            .arg("-0")
-            .arg(xvfb_pid.to_string())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
+        drop(hd);
+
+        // Poll for up to 2s to observe the process actually exit
+        let mut exited = false;
+        for _ in 0..20 {
+            thread::sleep(Duration::from_millis(100));
+            let status = Command::new("kill")
+                .arg("-0")
+                .arg(xvfb_pid.to_string())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+            if !status.map(|s| s.success()).unwrap_or(false) {
+                exited = true;
+                break;
+            }
+        }
+
         assert!(
-            status.is_err(),
+            exited,
             "Xvfb process {xvfb_pid} should not be running after drop"
         );
     }
@@ -583,22 +628,31 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "flaky: multi-process X servers survive kill - see note above"]
     fn openbox_dies_after_drop() {
         // After HeadlessDisplay drops, openbox must be dead
         let hd = HeadlessDisplay::start("800x600x24").expect("headless display should start");
         let openbox_pid = hd.openbox.id();
-        drop(hd);
-        thread::sleep(Duration::from_millis(300));
 
-        let status = Command::new("kill")
-            .arg("-0")
-            .arg(openbox_pid.to_string())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
+        drop(hd);
+
+        // Poll for up to 2s to observe the process actually exit
+        let mut exited = false;
+        for _ in 0..20 {
+            thread::sleep(Duration::from_millis(100));
+            let status = Command::new("kill")
+                .arg("-0")
+                .arg(openbox_pid.to_string())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+            if !status.map(|s| s.success()).unwrap_or(false) {
+                exited = true;
+                break;
+            }
+        }
+
         assert!(
-            status.is_err(),
+            exited,
             "openbox process {openbox_pid} should be dead after drop"
         );
     }
@@ -688,34 +742,44 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "flaky: multi-process X servers survive kill - see note above"]
     fn openbox_clean_exit_on_drop_no_zombie() {
         // After drop, openbox should be completely dead (not a zombie)
         let hd = HeadlessDisplay::start("800x600x24").expect("headless display should start");
         let openbox_pid = hd.openbox.id();
-        drop(hd);
-        thread::sleep(Duration::from_millis(300));
 
-        // Check process state via ps -p {pid} -o stat=
+        drop(hd);
+
+        // Poll for up to 2s for the process to exit
+        let mut exited = false;
+        for _ in 0..20 {
+            thread::sleep(Duration::from_millis(100));
+            let status = Command::new("kill")
+                .arg("-0")
+                .arg(openbox_pid.to_string())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+            if !status.map(|s| s.success()).unwrap_or(false) {
+                exited = true;
+                break;
+            }
+        }
+
+        // Process should be gone
+        assert!(exited, "openbox process {openbox_pid} should not exist after drop");
+
+        // And not a zombie (zombie would still show in ps)
         let output = Command::new("ps")
             .args(["-p", &openbox_pid.to_string(), "-o", "stat="])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .output()
-            .expect("ps should query process state");
-        let stat = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            .output();
+        let stat = String::from_utf8_lossy(&output.unwrap().stdout).trim().to_string();
+        // If ps succeeded, the process still exists as a zombie
         assert!(
             stat != "Z",
             "openbox should not be a zombie after drop, stat={stat}"
         );
-        // Also verify it's gone
-        let status = Command::new("kill")
-            .arg("-0")
-            .arg(openbox_pid.to_string())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
-        assert!(status.is_err(), "openbox process {openbox_pid} should not exist after drop");
     }
 
     #[test]
