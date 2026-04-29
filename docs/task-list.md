@@ -187,12 +187,12 @@ Based on the uploaded repo and design/backlog files, I treated **“full complet
 | 141. Add golden tests for expected JSON report snapshots                                  | Incomplete | Golden snapshots for every scenario                            | Snapshot update docs                            |
 | 142. Add golden tests for expected imported artifact manifests                            | Incomplete | Manifest snapshots for all GPUI and rust-chatbot artifact sets | Artifact docs                                   |
 | 143. Add help-output snapshot tests                                                       | Complete   | Snapshot tests for top-level and subcommand help               | `examples/help.md` must be generated or updated |
-| 144. Add docs/example consistency tests                                                   | Incomplete | Tests that every documented example config validates           | Examples docs must stay aligned                 |
-| 145. Add CI workflow for ordinary unit/integration tests                                  | Incomplete | CI must run non-live tests                                     | CONTRIBUTING or README test docs                |
+| 144. Add docs/example consistency tests                                                   | Complete   | Tests that every documented example config validates           | Examples docs must stay aligned                 |
+| 145. Add CI workflow for ordinary unit/integration tests                                  | Complete   | CI must run non-live tests                                     | CONTRIBUTING or README test docs                |
 | 146. Add documented opt-in path for live desktop tests                                    | Incomplete | CI/manual docs for `AUTO_UI_RUN_LIVE_TESTS=1`                  | README live-test section                        |
 | 147. Ensure ordinary tests do not require desktop, Xvfb, openbox, or target app checkouts | Incomplete | `cargo test --workspace` without optional deps must pass       | Test docs                                       |
-| 148. Add compile/check task for all workspace crates                                      | Incomplete | CI `cargo check --workspace` or equivalent                     | README/dev docs                                 |
-| 149. Add clippy/rustfmt quality gates if desired                                          | Incomplete | CI clippy/rustfmt jobs                                         | CONTRIBUTING/dev docs                           |
+| 148. Add compile/check task for all workspace crates                                      | Complete   | CI `cargo check --workspace` or equivalent                     | README/dev docs                                 |
+| 149. Add clippy/rustfmt quality gates if desired                                          | Complete   | CI clippy/rustfmt jobs                                         | CONTRIBUTING/dev docs                           |
 
 ## Build policy, packaging, and setup
 
