@@ -131,7 +131,7 @@ Based on the uploaded repo and design/backlog files, I treated **“full complet
 | 100. Make CSV parsing behavior consistent across scroll-matrix and conversation-paint summaries | Complete   | Malformed-row tests for both CSV formats                                    | Summary docs must define malformed-row handling       |
 | 101. Add row-drop warnings to conversation CSV parsing                                          | Complete   | Tests for malformed numeric values                                          | GPUI summary docs                                     |
 | 102. Add golden report tests for all GPUI scenarios                                             | Complete   | Golden JSON fixtures for scroll-matrix, scrollbar-trace, conversation-paint | Report docs must describe GPUI details                |
-| 103. Add artifact manifest tests for GPUI CSV/log/markdown imports                              | Incomplete | Tests verifying every expected artifact is registered                       | Artifact docs                                         |
+| 103. Add artifact manifest tests for GPUI CSV/log/markdown imports                              | Complete   | Tests verifying every expected artifact is registered                       | Artifact docs                                         |
 | 104. Keep GPUI docs current                                                                     | Complete   | Docs/examples should be checked by snapshot or link tests                   | Existing GPUI docs must remain aligned                |
 
 ## Driver layer and desktop support

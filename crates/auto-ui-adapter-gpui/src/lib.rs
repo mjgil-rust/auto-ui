@@ -1768,4 +1768,270 @@ mod tests {
 
         std::fs::remove_dir_all(temp).ok();
     }
+
+    // Helper to create a fake GPUI binary that writes proper output files
+    fn create_fake_gpui_binary(dir: &Path, name: &str, scenario: &str) -> PathBuf {
+        let bin_dir = dir.join("target").join("release").join("examples");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let bin_path = bin_dir.join(name);
+
+        let script = match scenario {
+            "scroll_matrix" => {
+                // BENCH_OUTPUT = CSV path, BENCH_VARIANT = variant name
+                // BENCH_DURATION_MS, BENCH_SCROLL_WARMUP_MS, etc. are also set
+                r#"#!/bin/bash
+OUTPUT_PATH="$BENCH_OUTPUT"
+mkdir -p "$(dirname "$OUTPUT_PATH")"
+cat > "$OUTPUT_PATH" << 'CSVEOF'
+elapsed_ms,variant,active,frame_total_us,sidebar_us,header_us,overlay_us,content_us,body_us,prepaint_since_render_ms
+1500,a,0,10000,0,0,0,4000,0,2
+1600,a,0,20000,0,0,0,7000,0,4
+CSVEOF
+# Also create stdout/stderr files that the adapter expects
+STDOUT_PATH="${OUTPUT_PATH%.frames.csv}.stdout.log"
+STDERR_PATH="${OUTPUT_PATH%.frames.csv}.stderr.log"
+echo "variant a started" > "$STDOUT_PATH"
+echo "[scrollbar] prepaint states=5" > "$STDERR_PATH"
+exit 0
+"#
+            }
+            "scrollbar_trace" => {
+                // scrollbar_trace writes to stderr, which is captured and parsed
+                // The stdout/stderr paths are output_dir.join(format!("{}.stdout.log", variant))
+                r#"#!/bin/bash
+# For scrollbar_trace, stderr is what matters - it looks for [scrollbar] prepaint lines
+# We need to write to stderr directly - but the adapter captures stdout/stderr
+# The actual trace output goes to stderr in the real app
+echo "[scrollbar] prepaint states=5" >&2
+echo "[scrollbar] prepaint states=3" >&2
+exit 0
+"#
+            }
+            "conversation_paint" => {
+                // BENCH_OUTPUT = CSV path, BENCH_VARIANT = thread_id
+                r#"#!/bin/bash
+OUTPUT_PATH="$BENCH_OUTPUT"
+mkdir -p "$(dirname "$OUTPUT_PATH")"
+cat > "$OUTPUT_PATH" << 'CSVEOF'
+elapsed_ms,render_num,render_total_us,sidebar_us,header_us,messages_us,layout_us,msg_count,msg_avg_us,msg_max_us,prepaint_latency_ms
+0,1,9000,0,0,3000,0,1,3000,3000,1.5
+10,2,18000,0,0,5000,0,1,5000,6000,3.0
+CSVEOF
+STDOUT_PATH="${OUTPUT_PATH%.frames.csv}.stdout.log"
+STDERR_PATH="${OUTPUT_PATH%.frames.csv}.stderr.log"
+echo "thread started" > "$STDOUT_PATH"
+echo "[scrollbar] prepaint states=5" > "$STDERR_PATH"
+exit 0
+"#
+            }
+            _ => panic!("unknown scenario: {}", scenario),
+        };
+
+        std::fs::write(&bin_path, script).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&bin_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        bin_path
+    }
+
+    // Helper to read and parse the report.json from a completed run
+    fn read_report_artifacts(report_path: &Path) -> serde_json::Value {
+        let content = std::fs::read_to_string(report_path).unwrap();
+        serde_json::from_str(&content).unwrap()
+    }
+
+    #[test]
+    fn scroll_matrix_registers_expected_artifacts() {
+        let temp = unique_temp_dir("artifact-scroll-matrix");
+        let output_dir = temp.join("output");
+        std::fs::create_dir_all(&output_dir).unwrap();
+
+        // Create fake GPUI binary
+        let _fake_bin = create_fake_gpui_binary(&temp, "fake_scroll_matrix", "scroll_matrix");
+
+        let config = ScrollMatrixConfig {
+            app_root: Some(temp.to_str().unwrap().to_string()),
+            example: "fake_scroll_matrix".to_string(),
+            variants: vec!["a".to_string()],
+            run_ms: 100,
+            warmup_ms: 50,
+            scroll_delay_ms: 16,
+            scroll_step_px: 40,
+            output_dir: Some(output_dir.to_str().unwrap().to_string()),
+            capture_window: false,
+            settle_ms: 100,
+            window_title_prefix: "Test".to_string(),
+            timeout_ms: Some(5000),
+        };
+
+        let completed = run_scroll_matrix(config).expect("run_scroll_matrix should succeed");
+
+        // Read the report and verify artifacts
+        let report = read_report_artifacts(&completed.report_path);
+        let artifacts: Vec<_> = report["artifacts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| a["kind"].as_str().unwrap())
+            .collect();
+
+        // Verify all expected artifacts are registered
+        assert!(
+            artifacts.contains(&"progress_log"),
+            "should have progress_log artifact"
+        );
+        assert!(
+            artifacts.contains(&"gpui_csv"),
+            "should have gpui_csv artifact"
+        );
+        assert!(
+            artifacts.contains(&"stdout_log"),
+            "should have stdout_log artifact"
+        );
+        assert!(
+            artifacts.contains(&"stderr_log"),
+            "should have stderr_log artifact"
+        );
+        assert!(
+            artifacts.contains(&"summary_tsv"),
+            "should have summary_tsv artifact"
+        );
+        assert!(
+            artifacts.contains(&"summary_markdown"),
+            "should have summary_markdown artifact"
+        );
+
+        std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[test]
+    fn scrollbar_trace_registers_expected_artifacts() {
+        let temp = unique_temp_dir("artifact-scrollbar-trace");
+        let output_dir = temp.join("output");
+        std::fs::create_dir_all(&output_dir).unwrap();
+
+        // Create fake GPUI binary for scrollbar_trace
+        let _fake_bin = create_fake_gpui_binary(&temp, "fake_scrollbar", "scrollbar_trace");
+
+        let config = ScrollbarTraceConfig {
+            app_root: Some(temp.to_str().unwrap().to_string()),
+            example: "fake_scrollbar".to_string(),
+            run_ms: 100,
+            warmup_ms: 50,
+            scroll_delay_ms: 16,
+            scroll_step_px: 40,
+            output_dir: Some(output_dir.to_str().unwrap().to_string()),
+            capture_window: false,
+            settle_ms: 100,
+            window_title: "Test Scrollbar".to_string(),
+            timeout_ms: Some(5000),
+        };
+
+        let completed =
+            run_scrollbar_trace(config).expect("run_scrollbar_trace should succeed");
+
+        // Read the report and verify artifacts
+        let report = read_report_artifacts(&completed.report_path);
+        let artifacts: Vec<_> = report["artifacts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| a["kind"].as_str().unwrap())
+            .collect();
+
+        // Verify all expected artifacts are registered
+        assert!(
+            artifacts.contains(&"progress_log"),
+            "should have progress_log artifact"
+        );
+        assert!(
+            artifacts.contains(&"stdout_log"),
+            "should have stdout_log artifact"
+        );
+        assert!(
+            artifacts.contains(&"stderr_log"),
+            "should have stderr_log artifact"
+        );
+        assert!(
+            artifacts.contains(&"summary_markdown"),
+            "should have summary_markdown artifact"
+        );
+
+        // scrollbar_trace does NOT have gpui_csv, summary_tsv, or window_screenshot (when capture_window=false)
+        assert!(
+            !artifacts.contains(&"gpui_csv"),
+            "scrollbar_trace should NOT have gpui_csv artifact"
+        );
+        assert!(
+            !artifacts.contains(&"summary_tsv"),
+            "scrollbar_trace should NOT have summary_tsv artifact"
+        );
+
+        std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[test]
+    fn conversation_paint_registers_expected_artifacts() {
+        let temp = unique_temp_dir("artifact-conversation-paint");
+        let output_dir = temp.join("output");
+        std::fs::create_dir_all(&output_dir).unwrap();
+
+        // Create fake GPUI binary for conversation_paint
+        let _fake_bin = create_fake_gpui_binary(&temp, "fake_conversation", "conversation_paint");
+
+        let config = ConversationPaintConfig {
+            app_root: Some(temp.to_str().unwrap().to_string()),
+            example: "fake_conversation".to_string(),
+            threads: vec![0],
+            run_ms: 100,
+            defer_first_frame: true,
+            output_dir: Some(output_dir.to_str().unwrap().to_string()),
+            capture_window: false,
+            settle_ms: 100,
+            window_title_prefix: "Test".to_string(),
+            timeout_ms: Some(5000),
+        };
+
+        let completed =
+            run_conversation_paint(config).expect("run_conversation_paint should succeed");
+
+        // Read the report and verify artifacts
+        let report = read_report_artifacts(&completed.report_path);
+        let artifacts: Vec<_> = report["artifacts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| a["kind"].as_str().unwrap())
+            .collect();
+
+        // Verify all expected artifacts are registered
+        assert!(
+            artifacts.contains(&"progress_log"),
+            "should have progress_log artifact"
+        );
+        assert!(
+            artifacts.contains(&"gpui_csv"),
+            "should have gpui_csv artifact"
+        );
+        assert!(
+            artifacts.contains(&"stdout_log"),
+            "should have stdout_log artifact"
+        );
+        assert!(
+            artifacts.contains(&"stderr_log"),
+            "should have stderr_log artifact"
+        );
+        assert!(
+            artifacts.contains(&"summary_tsv"),
+            "should have summary_tsv artifact"
+        );
+        assert!(
+            artifacts.contains(&"summary_markdown"),
+            "should have summary_markdown artifact"
+        );
+
+        std::fs::remove_dir_all(temp).ok();
+    }
 }
