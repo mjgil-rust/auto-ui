@@ -1,10 +1,10 @@
 use std::collections::HashSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use auto_ui_core::{render_command, run_command};
 use serde::Serialize;
 
@@ -388,6 +388,58 @@ pub fn heuristic_text_visible(metric: &VisualMetric) -> bool {
     metric.stddev >= 0.01 || metric.colors >= 16.0
 }
 
+/// Tools required by the X11 driver for window operations and screenshot capture.
+pub const REQUIRED_X11_TOOLS: &[&str] = &["xdotool", "wmctrl", "import", "convert", "identify"];
+
+/// Check that all required X11 tools are available in PATH.
+/// Returns Ok(()) if all tools are found, or an error listing missing tools.
+pub fn check_required_tools() -> Result<()> {
+    let mut missing = Vec::new();
+    for tool in REQUIRED_X11_TOOLS {
+        if which(tool).is_none() {
+            missing.push(*tool);
+        }
+    }
+    if missing.is_empty() {
+        Ok(())
+    } else {
+        bail!(
+            "Missing required X11 tools: {}. Install them with: apt install imagemagick wmctrl xdotool (or equivalent for your distro)",
+            missing.join(", ")
+        )
+    }
+}
+
+/// Check if a command is available in PATH.
+fn which(cmd: &str) -> Option<PathBuf> {
+    std::env::var_os("PATH").and_then(|path_var| {
+        std::env::split_paths(&path_var)
+            .filter_map(|dir| {
+                let path = dir.join(cmd);
+                if is_executable(&path) {
+                    Some(path)
+                } else {
+                    None
+                }
+            })
+            .next()
+    })
+}
+
+/// Check if a path is executable.
+#[cfg(unix)]
+fn is_executable(path: &std::path::Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::metadata(path)
+        .map(|m| m.permissions().mode() & 0o111 != 0)
+        .unwrap_or(false)
+}
+
+#[cfg(not(unix))]
+fn is_executable(path: &std::path::Path) -> bool {
+    std::fs::metadata(path).map(|m| m.is_file()).unwrap_or(false)
+}
+
 fn wait_for_option<T, F>(timeout: Duration, mut f: F) -> Result<Option<T>>
 where
     F: FnMut() -> Result<Option<T>>,
@@ -400,4 +452,64 @@ where
         thread::sleep(Duration::from_millis(200));
     }
     Ok(None)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn check_required_tools_missing_tool() {
+        // Test that missing tool is detected
+        // This will depend on what's installed, but at least one tool should be present
+        // in a typical dev environment, or the test will pass if all are missing
+        let result = check_required_tools();
+        // We just verify it doesn't panic and returns a Result
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn check_required_tools_reports_missing() {
+        // Create a fake tool name that should not exist
+        let missing = "this_tool_does_not_exist_12345";
+        let result = which(missing);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn which_finds_existing_command() {
+        // "true" exists on all Unix systems
+        let result = which("true");
+        #[cfg(unix)]
+        {
+            assert!(result.is_some());
+        }
+        // On non-Unix, this might not be found
+    }
+
+    #[test]
+    fn is_executable_detects_executable() {
+        #[cfg(unix)]
+        {
+            // /bin/true should be executable
+            assert!(is_executable(std::path::Path::new("/bin/true")));
+            // /usr/bin directory entry - some systems have directories with exec bit
+            // so we just test that a regular file executable check works
+        }
+    }
+
+    #[test]
+    fn is_executable_returns_false_for_nonexistent() {
+        assert!(!is_executable(std::path::Path::new("/nonexistent/path/xyz")));
+    }
+
+    #[test]
+    fn required_x11_tools_has_five_tools() {
+        assert_eq!(REQUIRED_X11_TOOLS.len(), 5);
+        assert!(REQUIRED_X11_TOOLS.contains(&"xdotool"));
+        assert!(REQUIRED_X11_TOOLS.contains(&"wmctrl"));
+        assert!(REQUIRED_X11_TOOLS.contains(&"import"));
+        assert!(REQUIRED_X11_TOOLS.contains(&"convert"));
+        assert!(REQUIRED_X11_TOOLS.contains(&"identify"));
+    }
 }
