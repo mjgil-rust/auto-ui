@@ -1,8 +1,8 @@
-mod debug_cmd;
-mod header_debug_cmd;
-mod logging;
-mod report_schema_cmd;
-mod run_cmd;
+pub mod debug_cmd;
+pub mod header_debug_cmd;
+pub mod logging;
+pub mod report_schema_cmd;
+pub mod run_cmd;
 
 use clap::{Parser, Subcommand};
 
@@ -12,9 +12,9 @@ use clap::{Parser, Subcommand};
     version,
     about = "Generic desktop UI automation helpers"
 )]
-struct Cli {
+pub struct Cli {
     #[command(subcommand)]
-    command: Command,
+    pub command: Command,
 }
 
 #[derive(Subcommand)]
