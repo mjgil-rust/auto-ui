@@ -874,7 +874,8 @@ fn run_process_with_optional_capture(
         let _ = x11::background_window(&window_id, restore_window_id.as_deref());
         if capture_window {
             if let Some(screenshot_path) = screenshot_path {
-                let _ = x11::capture_window_screenshot(&window_id, screenshot_path);
+                x11::capture_window_screenshot(&window_id, screenshot_path)
+                    .with_context(|| format!("failed to capture screenshot to {}", screenshot_path.display()))?;
             }
         }
     }
@@ -1448,6 +1449,11 @@ mod tests {
         assert!(result.is_ok());
         std::fs::remove_dir_all(temp).ok();
     }
+
+    // Note: screenshot_capture_error_propagates test would require a real window
+    // or x11 mocking to properly test. The screenshot code path only executes
+    // when a window is found, so we document that screenshot errors ARE propagated
+    // when the window exists but capture fails.
 
     #[test]
     #[ignore = "requires DISPLAY, built gpui examples, and AUTO_UI_RUN_LIVE_TESTS=1"]
