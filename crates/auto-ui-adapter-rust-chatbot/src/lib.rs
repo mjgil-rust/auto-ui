@@ -1742,8 +1742,14 @@ fn newest_trace_log() -> Result<PathBuf> {
 
 fn read_sessions_metadata(provider: Provider) -> Result<Map<String, Value>> {
     let metadata_path = provider_data_dir(provider)?.join("sessions.json");
+    parse_sessions_metadata_from_path(&metadata_path)
+}
+
+/// Parse sessions metadata from a specific file path.
+/// Useful for testing with mock files.
+fn parse_sessions_metadata_from_path(metadata_path: &Path) -> Result<Map<String, Value>> {
     let payload: Value = serde_json::from_str(
-        &fs::read_to_string(&metadata_path)
+        &fs::read_to_string(metadata_path)
             .with_context(|| format!("failed to read {}", metadata_path.display()))?,
     )
     .with_context(|| format!("failed to parse {}", metadata_path.display()))?;
@@ -1766,6 +1772,17 @@ fn load_sessions(
     default_session_names: Option<&[&str]>,
 ) -> Result<Vec<SessionEntry>> {
     let sessions_map = read_sessions_metadata(provider)?;
+    load_sessions_from_map(sessions_map, max_sessions, include_hidden, default_session_names)
+}
+
+/// Load sessions from an already-parsed sessions map.
+/// Useful for testing with mock data.
+fn load_sessions_from_map(
+    sessions_map: Map<String, Value>,
+    max_sessions: usize,
+    include_hidden: bool,
+    default_session_names: Option<&[&str]>,
+) -> Result<Vec<SessionEntry>> {
     let mut sessions = Vec::new();
     let mut seen_names = HashSet::new();
 
@@ -1835,6 +1852,16 @@ fn load_sessions(
 
 fn load_session_by_id(provider: Provider, session_id: &str) -> Result<SessionEntry> {
     let sessions_map = read_sessions_metadata(provider)?;
+    load_session_by_id_from_map(sessions_map, provider, session_id)
+}
+
+/// Load a session by ID from an already-parsed sessions map.
+/// Useful for testing with mock data.
+fn load_session_by_id_from_map(
+    sessions_map: Map<String, Value>,
+    provider: Provider,
+    session_id: &str,
+) -> Result<SessionEntry> {
     let raw = sessions_map.get(session_id).ok_or_else(|| {
         anyhow!(
             "Session {session_id:?} was not found for provider {:?}.",
@@ -2579,5 +2606,292 @@ mod tests {
         })
         .unwrap();
         assert!(completed.report_path.exists());
+    }
+
+    // Fixture-based tests for provider metadata parsing (Task #64, #78)
+
+    fn create_mock_sessions_map(
+        provider: Provider,
+        temp_dir: &Path,
+        sessions_json: &str,
+    ) -> Map<String, Value> {
+        let data_dir = temp_dir.join(match provider {
+            Provider::Claude => ".claude-desktop",
+            Provider::Codex => ".codex-desktop",
+            Provider::Gemini => ".gemini-desktop",
+        });
+        fs::create_dir_all(&data_dir).unwrap();
+        let metadata_path = data_dir.join("sessions.json");
+        fs::write(&metadata_path, sessions_json).unwrap();
+        parse_sessions_metadata_from_path(&metadata_path).unwrap()
+    }
+
+    #[test]
+    fn read_sessions_metadata_parses_valid_json() {
+        let temp = unique_temp_dir("metadata-valid");
+        let sessions_json = serde_json::json!({
+            "sessions": {
+                "abc123": {
+                    "id": "abc123",
+                    "name": "Test Session",
+                    "updated_at": "2024-01-15T10:30:00Z",
+                    "message_count": 42,
+                    "hidden": false
+                }
+            }
+        });
+        let sessions_map = create_mock_sessions_map(
+            Provider::Codex,
+            &temp,
+            &serde_json::to_string(&sessions_json).unwrap(),
+        );
+        assert_eq!(sessions_map.len(), 1);
+        assert!(sessions_map.contains_key("abc123"));
+        std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[test]
+    fn read_sessions_metadata_missing_sessions_object() {
+        let temp = unique_temp_dir("metadata-missing-sessions");
+        let data_dir = temp.join(".claude-desktop");
+        fs::create_dir_all(&data_dir).unwrap();
+        let metadata_path = data_dir.join("sessions.json");
+        fs::write(&metadata_path, r#"{"something_else": "not_sessions"}"#).unwrap();
+        let result = parse_sessions_metadata_from_path(&metadata_path);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("does not contain a sessions object"));
+        std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[test]
+    fn read_sessions_metadata_malformed_json() {
+        let temp = unique_temp_dir("metadata-malformed");
+        let data_dir = temp.join(".gemini-desktop");
+        fs::create_dir_all(&data_dir).unwrap();
+        let metadata_path = data_dir.join("sessions.json");
+        fs::write(&metadata_path, "this is not json {{{").unwrap();
+        let result = parse_sessions_metadata_from_path(&metadata_path);
+        assert!(result.is_err());
+        std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[test]
+    fn read_sessions_metadata_all_provider_types() {
+        // Test that all provider types can be parsed
+        for provider in [Provider::Claude, Provider::Codex, Provider::Gemini] {
+            let temp = unique_temp_dir(&format!("metadata-{provider:?}"));
+            let sessions_json = serde_json::json!({
+                "sessions": {}
+            });
+            let sessions_map = create_mock_sessions_map(
+                provider,
+                &temp,
+                &serde_json::to_string(&sessions_json).unwrap(),
+            );
+            assert!(sessions_map.is_empty(), "failed for {:?}", provider);
+            std::fs::remove_dir_all(temp).ok();
+        }
+    }
+
+    #[test]
+    fn load_sessions_filters_hidden_sessions() {
+        let temp = unique_temp_dir("sessions-hidden-filter");
+        let sessions_json = serde_json::json!({
+            "sessions": {
+                "session1": {
+                    "id": "session1",
+                    "name": "Visible Session",
+                    "updated_at": "2024-01-15T10:30:00Z",
+                    "message_count": 10,
+                    "hidden": false
+                },
+                "session2": {
+                    "id": "session2",
+                    "name": "Hidden Session",
+                    "updated_at": "2024-01-15T10:31:00Z",
+                    "message_count": 5,
+                    "hidden": true
+                }
+            }
+        });
+        let sessions_map = create_mock_sessions_map(
+            Provider::Codex,
+            &temp,
+            &serde_json::to_string(&sessions_json).unwrap(),
+        );
+        let result = load_sessions_from_map(sessions_map, 10, false, None);
+        assert!(result.is_ok());
+        let sessions = result.unwrap();
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].name, "Visible Session");
+        std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[test]
+    fn load_sessions_includes_hidden_when_requested() {
+        let temp = unique_temp_dir("sessions-include-hidden");
+        let sessions_json = serde_json::json!({
+            "sessions": {
+                "session1": {
+                    "id": "session1",
+                    "name": "Visible Session",
+                    "updated_at": "2024-01-15T10:30:00Z",
+                    "message_count": 10,
+                    "hidden": false
+                },
+                "session2": {
+                    "id": "session2",
+                    "name": "Hidden Session",
+                    "updated_at": "2024-01-15T10:31:00Z",
+                    "message_count": 5,
+                    "hidden": true
+                }
+            }
+        });
+        let sessions_map = create_mock_sessions_map(
+            Provider::Codex,
+            &temp,
+            &serde_json::to_string(&sessions_json).unwrap(),
+        );
+        let result = load_sessions_from_map(sessions_map, 10, true, None);
+        assert!(result.is_ok());
+        let sessions = result.unwrap();
+        assert_eq!(sessions.len(), 2);
+        std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[test]
+    fn load_sessions_filters_zero_message_count() {
+        let temp = unique_temp_dir("sessions-zero-count-filter");
+        let sessions_json = serde_json::json!({
+            "sessions": {
+                "session1": {
+                    "id": "session1",
+                    "name": "Active Session",
+                    "updated_at": "2024-01-15T10:30:00Z",
+                    "message_count": 10,
+                    "hidden": false
+                },
+                "session2": {
+                    "id": "session2",
+                    "name": "Empty Session",
+                    "updated_at": "2024-01-15T10:31:00Z",
+                    "message_count": 0,
+                    "hidden": false
+                }
+            }
+        });
+        let sessions_map = create_mock_sessions_map(
+            Provider::Codex,
+            &temp,
+            &serde_json::to_string(&sessions_json).unwrap(),
+        );
+        let result = load_sessions_from_map(sessions_map, 10, true, None);
+        assert!(result.is_ok());
+        let sessions = result.unwrap();
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].name, "Active Session");
+        std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[test]
+    fn load_sessions_respects_max_sessions() {
+        let temp = unique_temp_dir("sessions-max-limit");
+        let mut sessions = serde_json::Map::new();
+        for i in 0..5 {
+            let mut session = serde_json::Map::new();
+            session.insert("id".to_string(), serde_json::json!(format!("session{}", i)));
+            session.insert("name".to_string(), serde_json::json!(format!("Session {}", i)));
+            session.insert("updated_at".to_string(), serde_json::json!("2024-01-15T10:00:00Z"));
+            session.insert("message_count".to_string(), serde_json::json!(10 - i));
+            session.insert("hidden".to_string(), serde_json::json!(false));
+            sessions.insert(format!("session{}", i), serde_json::Value::Object(session));
+        }
+        let sessions_map = create_mock_sessions_map(
+            Provider::Codex,
+            &temp,
+            &serde_json::to_string(&serde_json::json!({ "sessions": sessions })).unwrap(),
+        );
+        let result = load_sessions_from_map(sessions_map, 3, true, None);
+        assert!(result.is_ok());
+        let sessions = result.unwrap();
+        assert_eq!(sessions.len(), 3);
+        std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[test]
+    fn load_session_by_id_found() {
+        let temp = unique_temp_dir("session-by-id-found");
+        let sessions_json = serde_json::json!({
+            "sessions": {
+                "abc123": {
+                    "id": "abc123",
+                    "name": "Test Session",
+                    "updated_at": "2024-01-15T10:30:00Z",
+                    "message_count": 42,
+                    "hidden": false
+                }
+            }
+        });
+        let sessions_map = create_mock_sessions_map(
+            Provider::Claude,
+            &temp,
+            &serde_json::to_string(&sessions_json).unwrap(),
+        );
+        let result = load_session_by_id_from_map(sessions_map, Provider::Claude, "abc123");
+        assert!(result.is_ok());
+        let session = result.unwrap();
+        assert_eq!(session.session_id, "abc123");
+        assert_eq!(session.name, "Test Session");
+        std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[test]
+    fn load_session_by_id_not_found() {
+        let temp = unique_temp_dir("session-by-id-not-found");
+        let sessions_json = serde_json::json!({
+            "sessions": {
+                "abc123": {
+                    "id": "abc123",
+                    "name": "Test Session",
+                    "updated_at": "2024-01-15T10:30:00Z",
+                    "message_count": 42,
+                    "hidden": false
+                }
+            }
+        });
+        let sessions_map = create_mock_sessions_map(
+            Provider::Claude,
+            &temp,
+            &serde_json::to_string(&sessions_json).unwrap(),
+        );
+        let result = load_session_by_id_from_map(sessions_map, Provider::Claude, "nonexistent");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("was not found"));
+        std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[test]
+    fn load_session_by_id_missing_name_field() {
+        let temp = unique_temp_dir("session-missing-name");
+        let sessions_json = serde_json::json!({
+            "sessions": {
+                "abc123": {
+                    "id": "abc123",
+                    "updated_at": "2024-01-15T10:30:00Z",
+                    "message_count": 42,
+                    "hidden": false
+                }
+            }
+        });
+        let sessions_map = create_mock_sessions_map(
+            Provider::Gemini,
+            &temp,
+            &serde_json::to_string(&sessions_json).unwrap(),
+        );
+        let result = load_session_by_id_from_map(sessions_map, Provider::Gemini, "abc123");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("missing a name"));
+        std::fs::remove_dir_all(temp).ok();
     }
 }
