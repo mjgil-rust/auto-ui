@@ -5,6 +5,7 @@ pub mod inspect_report_cmd;
 pub mod logging;
 pub mod report_schema_cmd;
 pub mod run_cmd;
+pub mod scenario_schema_cmd;
 
 use clap::{Parser, Subcommand};
 
@@ -38,6 +39,8 @@ enum Command {
     },
     /// Inspect an existing report.json file
     Inspect(inspect_report_cmd::Args),
+    /// Print the JSON schema for scenario configuration files
+    ScenarioSchema(scenario_schema_cmd::ScenarioSchemaArgs),
 }
 
 fn main() {
@@ -67,5 +70,6 @@ fn run() -> anyhow::Result<()> {
             Ok(())
         }
         Command::Inspect(args) => inspect_report_cmd::run(args),
+        Command::ScenarioSchema(args) => scenario_schema_cmd::run(&args),
     }
 }
