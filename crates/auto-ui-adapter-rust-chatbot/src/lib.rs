@@ -2384,4 +2384,28 @@ mod tests {
         .unwrap();
         assert!(completed.report_path.exists());
     }
+
+    #[test]
+    #[ignore = "requires DISPLAY, built rust-chatbot binaries, and AUTO_UI_RUN_LIVE_TESTS=1"]
+    fn live_prompt_debug_single_session_smoke() {
+        let _guard = live_test_lock().lock().unwrap();
+        require_live_opt_in();
+        let output_dir = unique_temp_dir("rust-chatbot-prompt-live");
+        let completed = run_prompt_debug(PromptDebugConfig {
+            app_root: Some(require_env("AUTO_UI_TEST_RUST_CHATBOT_ROOT")),
+            provider: provider_from_env(),
+            instance: None,
+            session_id: require_env("AUTO_UI_TEST_RUST_CHATBOT_SESSION_ID"),
+            prompt: "Hello, respond with a brief greeting.".to_string(),
+            width: 700,
+            height: 720,
+            window_timeout: 20.0,
+            response_timeout: 30.0,
+            settle: 0.8,
+            output_dir: Some(output_dir.display().to_string()),
+            keep_front: false,
+        })
+        .unwrap();
+        assert!(completed.report_path.exists());
+    }
 }
