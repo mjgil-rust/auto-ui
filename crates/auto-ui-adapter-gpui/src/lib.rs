@@ -30,6 +30,8 @@ pub struct ScrollMatrixConfig {
     pub capture_window: bool,
     pub settle_ms: u64,
     pub window_title_prefix: String,
+    /// Optional process timeout in milliseconds. If not set, process runs without a harness-level timeout.
+    pub timeout_ms: Option<u64>,
 }
 
 impl Default for ScrollMatrixConfig {
@@ -51,6 +53,7 @@ impl Default for ScrollMatrixConfig {
             capture_window: false,
             settle_ms: 800,
             window_title_prefix: "Auto UI GPUI Scroll Matrix".to_string(),
+            timeout_ms: None,
         }
     }
 }
@@ -67,6 +70,8 @@ pub struct ScrollbarTraceConfig {
     pub capture_window: bool,
     pub settle_ms: u64,
     pub window_title: String,
+    /// Optional process timeout in milliseconds.
+    pub timeout_ms: Option<u64>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -80,6 +85,8 @@ pub struct ConversationPaintConfig {
     pub capture_window: bool,
     pub settle_ms: u64,
     pub window_title_prefix: String,
+    /// Optional process timeout in milliseconds.
+    pub timeout_ms: Option<u64>,
 }
 
 impl Default for ScrollbarTraceConfig {
@@ -95,6 +102,7 @@ impl Default for ScrollbarTraceConfig {
             capture_window: false,
             settle_ms: 800,
             window_title: "Auto UI GPUI Scrollbar Trace".to_string(),
+            timeout_ms: None,
         }
     }
 }
@@ -111,6 +119,7 @@ impl Default for ConversationPaintConfig {
             capture_window: false,
             settle_ms: 800,
             window_title_prefix: "Auto UI GPUI Conversation Paint".to_string(),
+            timeout_ms: None,
         }
     }
 }
@@ -231,6 +240,7 @@ pub fn run_scroll_matrix(config: ScrollMatrixConfig) -> Result<CompletedRun> {
                 config.settle_ms,
                 Some(window_title.as_str()),
                 Some(&screenshot_path),
+                config.timeout_ms,
             )?;
 
             let summary = summarize_scroll_matrix_csv(&csv_path, config.warmup_ms)?;
@@ -393,6 +403,7 @@ pub fn run_scrollbar_trace(config: ScrollbarTraceConfig) -> Result<CompletedRun>
             config.settle_ms,
             Some(config.window_title.as_str()),
             Some(&screenshot_path),
+            config.timeout_ms,
         )?;
 
         let summary = summarize_scrollbar_stderr(&stderr_path)?;
@@ -533,6 +544,7 @@ pub fn run_conversation_paint(config: ConversationPaintConfig) -> Result<Complet
                 config.settle_ms,
                 Some(window_title.as_str()),
                 Some(&screenshot_path),
+                config.timeout_ms,
             )?;
 
             let summary = summarize_conversation_csv(&csv_path)?;
@@ -840,11 +852,12 @@ fn run_process_with_optional_capture(
     settle_ms: u64,
     window_title: Option<&str>,
     screenshot_path: Option<&Path>,
+    timeout_ms: Option<u64>,
 ) -> Result<()> {
     let restore_window_id = x11::get_active_window_id()?;
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
-    let child = command
+    let mut child = command
         .spawn()
         .with_context(|| "failed to start gpui process".to_string())?;
 
@@ -866,15 +879,35 @@ fn run_process_with_optional_capture(
         }
     }
 
-    let output = child.wait_with_output()?;
-    fs::write(stdout_path, &output.stdout)
+    // Wait for process with optional timeout
+    let exit_status = if let Some(timeout) = timeout_ms {
+        let start = std::time::Instant::now();
+        let timeout_duration = Duration::from_millis(timeout);
+        loop {
+            match child.try_wait() {
+                Ok(Some(status)) => break status,
+                Ok(None) => {
+                    if start.elapsed() >= timeout_duration {
+                        child.kill().ok();
+                        bail!("process timed out after {}ms", timeout);
+                    }
+                    thread::sleep(Duration::from_millis(50));
+                }
+                Err(e) => return Err(e).context("failed to wait on process"),
+            }
+        }
+    } else {
+        child.wait().context("failed to wait for gpui process")?
+    };
+
+    fs::write(stdout_path, b"")
         .with_context(|| format!("failed to write {}", stdout_path.display()))?;
-    fs::write(stderr_path, &output.stderr)
+    fs::write(stderr_path, b"")
         .with_context(|| format!("failed to write {}", stderr_path.display()))?;
-    if !output.status.success() {
+    if !exit_status.success() {
         bail!(
             "gpui process failed with status {}. stderr log: {}",
-            output.status,
+            exit_status,
             stderr_path.display()
         );
     }
@@ -1347,6 +1380,64 @@ mod tests {
     }
 
     #[test]
+    fn run_process_timeout_enforces_timeout() {
+        // Test that the timeout parameter actually works by spawning a long-running command
+        let temp = unique_temp_dir("process-timeout-test");
+        let stdout_path = temp.join("stdout.log");
+        let stderr_path = temp.join("stderr.log");
+        let screenshot_path = temp.join("screenshot.png");
+
+        // Spawn a command that sleeps for 10 seconds
+        let mut command = std::process::Command::new("sleep");
+        command.arg("10");
+
+        // With a 100ms timeout, this should fail
+        let result = run_process_with_optional_capture(
+            command,
+            &stdout_path,
+            &stderr_path,
+            false,
+            0,
+            None,
+            None,
+            Some(100), // 100ms timeout
+        );
+
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("timed out"),
+            "expected timeout error, got: {}",
+            err_msg
+        );
+        std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[test]
+    fn run_process_without_timeout_succeeds() {
+        // Test that without a timeout, a quick command succeeds
+        let temp = unique_temp_dir("process-no-timeout-test");
+        let stdout_path = temp.join("stdout.log");
+        let stderr_path = temp.join("stderr.log");
+
+        let mut command = std::process::Command::new("true");
+
+        let result = run_process_with_optional_capture(
+            command,
+            &stdout_path,
+            &stderr_path,
+            false,
+            0,
+            None,
+            None,
+            None, // no timeout
+        );
+
+        assert!(result.is_ok());
+        std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[test]
     #[ignore = "requires DISPLAY, built gpui examples, and AUTO_UI_RUN_LIVE_TESTS=1"]
     fn live_scroll_matrix_smoke() {
         let _guard = live_test_lock().lock().unwrap();
@@ -1364,6 +1455,7 @@ mod tests {
             capture_window: false,
             settle_ms: 300,
             window_title_prefix: "Auto UI GPUI Smoke".to_string(),
+            timeout_ms: None,
         })
         .unwrap();
         assert!(completed.report_path.exists());
@@ -1386,6 +1478,7 @@ mod tests {
             capture_window: false,
             settle_ms: 300,
             window_title: "Auto UI GPUI Scrollbar Smoke".to_string(),
+            timeout_ms: None,
         })
         .unwrap();
         assert!(completed.report_path.exists());
@@ -1407,6 +1500,7 @@ mod tests {
             capture_window: false,
             settle_ms: 300,
             window_title_prefix: "Auto UI GPUI Conversation Smoke".to_string(),
+            timeout_ms: None,
         })
         .unwrap();
         assert!(completed.report_path.exists());
