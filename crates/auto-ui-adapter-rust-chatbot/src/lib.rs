@@ -1862,10 +1862,36 @@ fn load_sessions_from_map(
             }
         }
         if !missing.is_empty() {
-            bail!(
-                "Default auto-ui sessions were not found: {}",
+            tracing::warn!(
+                "Default auto-ui sessions were not found, falling back to recent: {}",
                 missing.join(", ")
             );
+        }
+        // Fall back to recent sessions when named sessions not fully available
+        if ordered.len() < default_session_names.len() {
+            let mut all_sessions: Vec<_> = sessions_map
+                .values()
+                .map(|v| SessionEntry {
+                    session_id: v.get("id").and_then(Value::as_str).unwrap_or_default().to_string(),
+                    name: v.get("name").and_then(Value::as_str).unwrap_or_default().to_string(),
+                    updated_at: v
+                        .get("updated_at")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
+                    message_count: v
+                        .get("message_count")
+                        .and_then(Value::as_i64)
+                        .unwrap_or(0),
+                })
+                .collect();
+            all_sessions.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
+            let existing_ids: HashSet<_> = ordered.iter().map(|s| s.session_id.clone()).collect();
+            for session in all_sessions {
+                if !existing_ids.contains(&session.session_id) && ordered.len() < max_sessions {
+                    ordered.push(session);
+                }
+            }
         }
         return Ok(ordered);
     }
@@ -3267,5 +3293,58 @@ mod tests {
         let line = r#"session_id="my-session" token=sk-ant-key value=plain"#;
         let session_id = extract_session_id_from_line(line);
         assert_eq!(session_id, Some("my-session".to_string()));
+    }
+
+    #[test]
+    fn load_sessions_falls_back_when_some_default_sessions_missing() {
+        // When some but not all named sessions exist, should fall back to recent
+        let mut map = Map::new();
+        let now = "2024-01-15T10:00:00+00:00".to_string();
+
+        map.insert(
+            "session-1".to_string(),
+            serde_json::json!({
+                "id": "session-1",
+                "name": "alpha",
+                "updated_at": now,
+                "message_count": 5
+            }),
+        );
+        map.insert(
+            "session-2".to_string(),
+            serde_json::json!({
+                "id": "session-2",
+                "name": "beta",
+                "updated_at": now,
+                "message_count": 10
+            }),
+        );
+        map.insert(
+            "session-3".to_string(),
+            serde_json::json!({
+                "id": "session-3",
+                "name": "gamma",
+                "updated_at": now,
+                "message_count": 3
+            }),
+        );
+
+        // Request "alpha" and "nonexistent" - should return alpha + fall back to recent
+        let result =
+            load_sessions_from_map(map, 10, false, Some(&["alpha", "nonexistent"]));
+        assert!(result.is_ok());
+        let sessions = result.unwrap();
+        // Should have alpha and fall back to beta/gamma (sorted by recency)
+        assert!(!sessions.is_empty());
+        assert!(sessions.iter().any(|s| s.name == "alpha"));
+    }
+
+    #[test]
+    fn load_sessions_returns_empty_when_no_sessions_exist() {
+        let map = Map::new();
+        let result = load_sessions_from_map(map, 10, false, Some(&["missing"]));
+        assert!(result.is_ok());
+        let sessions = result.unwrap();
+        assert!(sessions.is_empty());
     }
 }
