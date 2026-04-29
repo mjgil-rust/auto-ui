@@ -112,6 +112,9 @@ session, built target app binaries, and explicit env vars.
 - GPUI tests require `AUTO_UI_TEST_GPUI_ROOT` and cover `scroll_matrix`,
   `scrollbar_trace`, and `conversation_paint`.
 
+CI does not run live tests by default. Run them manually with the appropriate
+environment variables set.
+
 ## Desktop Behavior
 
 The automation should strive to be minimally conflicting with a desktop user's
