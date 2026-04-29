@@ -888,7 +888,15 @@ fn run_process_with_optional_capture(
                 Ok(Some(status)) => break status,
                 Ok(None) => {
                     if start.elapsed() >= timeout_duration {
+                        // Kill and capture output before bailing
                         child.kill().ok();
+                        let output = child.wait_with_output().ok();
+                        if let Some(o) = output {
+                            fs::write(stdout_path, &o.stdout)
+                                .with_context(|| format!("failed to write {}", stdout_path.display()))?;
+                            fs::write(stderr_path, &o.stderr)
+                                .with_context(|| format!("failed to write {}", stderr_path.display()))?;
+                        }
                         bail!("process timed out after {}ms", timeout);
                     }
                     thread::sleep(Duration::from_millis(50));
@@ -900,6 +908,7 @@ fn run_process_with_optional_capture(
         child.wait().context("failed to wait for gpui process")?
     };
 
+    // Write empty logs - actual output is captured by caller via stdout/stderr pipes when needed
     fs::write(stdout_path, b"")
         .with_context(|| format!("failed to write {}", stdout_path.display()))?;
     fs::write(stderr_path, b"")
@@ -1410,6 +1419,9 @@ mod tests {
             "expected timeout error, got: {}",
             err_msg
         );
+        // Verify logs were written even on timeout (Task #95)
+        assert!(stdout_path.exists(), "stdout should be written on timeout");
+        assert!(stderr_path.exists(), "stderr should be written on timeout");
         std::fs::remove_dir_all(temp).ok();
     }
 
