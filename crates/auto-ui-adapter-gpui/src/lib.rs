@@ -1505,7 +1505,10 @@ mod tests {
         std::env::set_var("AUTO_UI_GPUI_APP_ROOT", "/tmp/auto-ui-should-lose");
         let result = resolve_app_root(None);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap().to_string_lossy(), "/tmp/gpui-wins");
+        let path_buf = result.unwrap();
+        let actual_path = path_buf.to_string_lossy();
+        // GPUI env takes priority over AUTO_UI env
+        assert_eq!(actual_path, "/tmp/gpui-wins");
         std::env::remove_var("GPUI_COMPONENT_TESTING_ROOT");
         std::env::remove_var("AUTO_UI_GPUI_APP_ROOT");
     }
