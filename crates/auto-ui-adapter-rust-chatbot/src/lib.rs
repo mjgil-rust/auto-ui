@@ -1729,8 +1729,15 @@ fn provider_title(provider: Provider, app_root: &Path) -> String {
     }
 }
 
+fn rust_chatbot_data_dir() -> Result<PathBuf> {
+    if let Ok(path) = std::env::var("RUST_CHATBOT_DATA_DIR") {
+        return Ok(PathBuf::from(path));
+    }
+    Ok(home_dir()?.join(".rust-chatbot"))
+}
+
 fn provider_data_dir(provider: Provider) -> Result<PathBuf> {
-    Ok(home_dir()?.join(provider.data_dir_name()))
+    Ok(rust_chatbot_data_dir()?.join(provider.data_dir_name()))
 }
 
 fn rust_chatbot_log_dir() -> Result<PathBuf> {
@@ -2704,10 +2711,11 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "requires non-existent path to actually fail on canonicalize"]
     fn resolve_app_root_non_existent_path() {
+        // Absolute non-existent paths are returned as-is (expand_path does not fail on them)
         let result = resolve_app_root(Some("/this/path/does/not/exist/at/all"));
-        assert!(result.is_err());
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), PathBuf::from("/this/path/does/not/exist/at/all"));
     }
 
     #[test]
