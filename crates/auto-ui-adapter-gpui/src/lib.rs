@@ -1055,22 +1055,57 @@ fn summarize_conversation_csv(path: &Path) -> Result<ConversationSummary> {
     let mut messages_values = Vec::new();
     let mut prepaint_values = Vec::new();
     let mut message_max_values = Vec::new();
+    let mut dropped_rows = 0usize;
     for (index, line) in text.lines().enumerate() {
         if index == 0 || line.trim().is_empty() {
             continue;
         }
         let cols: Vec<_> = line.split(',').collect();
         if cols.len() < 11 {
+            dropped_rows += 1;
             continue;
         }
-        let render_us = cols[2].trim().parse::<f64>().unwrap_or(0.0);
+        let render_us = match cols[2].trim().parse::<f64>() {
+            Ok(v) => v,
+            Err(_) => {
+                dropped_rows += 1;
+                continue;
+            }
+        };
         render_values.push(render_us / 1000.0);
-        let messages_us = cols[5].trim().parse::<f64>().unwrap_or(0.0);
+        let messages_us = match cols[5].trim().parse::<f64>() {
+            Ok(v) => v,
+            Err(_) => {
+                dropped_rows += 1;
+                continue;
+            }
+        };
         messages_values.push(messages_us / 1000.0);
-        let message_max_us = cols[9].trim().parse::<f64>().unwrap_or(0.0);
+        let message_max_us = match cols[9].trim().parse::<f64>() {
+            Ok(v) => v,
+            Err(_) => {
+                dropped_rows += 1;
+                continue;
+            }
+        };
         message_max_values.push(message_max_us / 1000.0);
-        let prepaint_latency_ms = cols[10].trim().parse::<f64>().unwrap_or(0.0);
+        let prepaint_latency_ms = match cols[10].trim().parse::<f64>() {
+            Ok(v) => v,
+            Err(_) => {
+                dropped_rows += 1;
+                continue;
+            }
+        };
         prepaint_values.push(prepaint_latency_ms);
+    }
+    if dropped_rows > 0 {
+        log_line(
+            format!(
+                "warning: dropped {dropped_rows} malformed row(s) from {}",
+                path.display()
+            ),
+            None,
+        )?;
     }
 
     if render_values.is_empty() {
@@ -1387,6 +1422,38 @@ mod tests {
         assert_eq!(summary.over_33ms, 1);
         assert!(summary.p95_render_ms >= 18.0);
         assert!(summary.p95_message_max_ms >= 6.0);
+    }
+
+    #[test]
+    fn summarize_conversation_csv_drops_malformed_rows() {
+        let path = unique_temp_dir("conversation-malformed").join("frames.csv");
+        // Row with only 5 columns should be dropped
+        fs::write(
+            &path,
+            "elapsed_ms,render_num,render_total_us,sidebar_us,header_us,messages_us,layout_us,msg_count,msg_avg_us,msg_max_us,prepaint_latency_ms\n0,1,9000,0,0,3000,0,1,3000,3000,1.5\n50,0,not_a_number,0,0,5000,0,1,5000,6000,3.0\n100,3,40000,0,0,15000,0,1,15000,18000,7.0\n",
+        )
+        .unwrap();
+
+        let summary = summarize_conversation_csv(&path).unwrap();
+        assert_eq!(summary.samples, 2, "only 2 valid rows expected");
+        // Valid rows: 9ms (< 16ms), 40ms (> 16ms, > 33ms)
+        assert_eq!(summary.over_16ms, 1);
+        assert_eq!(summary.over_33ms, 1);
+    }
+
+    #[test]
+    fn summarize_scroll_matrix_csv_drops_malformed_rows() {
+        let path = unique_temp_dir("scroll-matrix-malformed").join("frames.csv");
+        fs::write(
+            &path,
+            "elapsed_ms,variant,active,frame_total_us,sidebar_us,header_us,overlay_us,content_us,body_us,prepaint_since_render_ms\n1500,a,0,10000,0,0,0,4000,0,2\n1600,a,0,bad_value,0,0,0,7000,0,4\n1700,a,0,50000,0,0,0,9000,0,8\n",
+        )
+        .unwrap();
+
+        let summary = summarize_scroll_matrix_csv(&path, 1500).unwrap();
+        assert_eq!(summary.samples, 2, "only 2 valid rows expected");
+        // Row 1: 10ms (< 16ms), Row 3: 50ms (> 16ms)
+        assert_eq!(summary.over_16ms, 1);
     }
 
     #[test]
