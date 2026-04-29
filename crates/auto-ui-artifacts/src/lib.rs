@@ -595,6 +595,234 @@ mod tests {
         );
     }
 
+    // Event schema conventions tests
+
+    #[test]
+    fn lifecycle_events_emit_all_required_fields() {
+        let mut report = Report::new(
+            "test_target",
+            "test_scenario",
+            "startup_driven",
+            Path::new("/tmp"),
+        );
+        report.push_lifecycle_event("prepare", "adapter initialized");
+        report.push_lifecycle_event("launch", "process spawned");
+        report.push_lifecycle_event("collect", "artifacts gathered");
+        report.push_lifecycle_event("stop", "cleanup complete");
+
+        assert_eq!(report.events.len(), 4);
+
+        // Verify all lifecycle events have required fields
+        for (i, phase) in ["prepare", "launch", "collect", "stop"].iter().enumerate() {
+            let event = &report.events[i];
+            assert_eq!(
+                event.get("kind").and_then(Value::as_str),
+                Some("lifecycle"),
+                "event {} should have kind 'lifecycle'",
+                i
+            );
+            assert_eq!(
+                event.get("phase").and_then(Value::as_str),
+                Some(*phase),
+                "event {} should have phase '{}'",
+                i,
+                phase
+            );
+            assert!(
+                event.get("timestamp").is_some(),
+                "event {} should have timestamp",
+                i
+            );
+        }
+    }
+
+    #[test]
+    fn retry_events_emit_all_required_fields() {
+        let mut report = Report::new(
+            "test_target",
+            "test_scenario",
+            "startup_driven",
+            Path::new("/tmp"),
+        );
+        report.push_retry_event("window_discovery", 2, 5);
+
+        let event = &report.events[0];
+        assert_eq!(event.get("kind").and_then(Value::as_str), Some("retry"));
+        assert_eq!(
+            event.get("operation").and_then(Value::as_str),
+            Some("window_discovery")
+        );
+        assert_eq!(
+            event.get("attempt").and_then(Value::as_u64),
+            Some(2)
+        );
+        assert_eq!(
+            event.get("max_attempts").and_then(Value::as_u64),
+            Some(5)
+        );
+        assert!(event.get("timestamp").is_some());
+    }
+
+    #[test]
+    fn timeout_events_emit_all_required_fields() {
+        let mut report = Report::new(
+            "test_target",
+            "test_scenario",
+            "startup_driven",
+            Path::new("/tmp"),
+        );
+        report.push_timeout_event("trace_wait", 30);
+
+        let event = &report.events[0];
+        assert_eq!(event.get("kind").and_then(Value::as_str), Some("timeout"));
+        assert_eq!(
+            event.get("operation").and_then(Value::as_str),
+            Some("trace_wait")
+        );
+        assert_eq!(
+            event.get("timeout_secs").and_then(Value::as_u64),
+            Some(30)
+        );
+        assert!(event.get("timestamp").is_some());
+    }
+
+    #[test]
+    fn foreground_control_events_emit_all_required_fields() {
+        let mut report = Report::new(
+            "test_target",
+            "test_scenario",
+            "interactive_window",
+            Path::new("/tmp"),
+        );
+        report.push_foreground_event("lower", "0x123abc");
+        report.push_foreground_event("activate", "0x456def");
+
+        assert_eq!(report.events.len(), 2);
+
+        let lower_event = &report.events[0];
+        assert_eq!(
+            lower_event.get("kind").and_then(Value::as_str),
+            Some("foreground_control")
+        );
+        assert_eq!(
+            lower_event.get("action").and_then(Value::as_str),
+            Some("lower")
+        );
+        assert_eq!(
+            lower_event.get("window_id").and_then(Value::as_str),
+            Some("0x123abc")
+        );
+        assert!(lower_event.get("timestamp").is_some());
+
+        let activate_event = &report.events[1];
+        assert_eq!(
+            activate_event.get("action").and_then(Value::as_str),
+            Some("activate")
+        );
+        assert_eq!(
+            activate_event.get("window_id").and_then(Value::as_str),
+            Some("0x456def")
+        );
+    }
+
+    #[test]
+    fn import_events_emit_all_required_fields() {
+        let mut report = Report::new(
+            "test_target",
+            "test_scenario",
+            "startup_driven",
+            Path::new("/tmp"),
+        );
+        report.push_import_event("progress_log", "/tmp/out/progress.log");
+        report.push_import_event("summary_csv", "/tmp/out/summary.csv");
+
+        assert_eq!(report.events.len(), 2);
+
+        for (i, expected_kind) in ["progress_log", "summary_csv"].iter().enumerate() {
+            let event = &report.events[i];
+            assert_eq!(
+                event.get("kind").and_then(Value::as_str),
+                Some("import"),
+                "event {} should have kind 'import'",
+                i
+            );
+            assert_eq!(
+                event.get("artifact_kind").and_then(Value::as_str),
+                Some(*expected_kind),
+                "event {} should have artifact_kind '{}'",
+                i,
+                expected_kind
+            );
+            assert!(
+                event.get("path").and_then(Value::as_str).is_some(),
+                "event {} should have path",
+                i
+            );
+            assert!(event.get("timestamp").is_some());
+        }
+    }
+
+    #[test]
+    fn window_events_emit_all_required_fields() {
+        let mut report = Report::new(
+            "test_target",
+            "test_scenario",
+            "interactive_window",
+            Path::new("/tmp"),
+        );
+        let details = json!({"width": 1280, "height": 800});
+        report.push_window_event("resize", "0x789abc", details.clone());
+
+        let event = &report.events[0];
+        assert_eq!(event.get("kind").and_then(Value::as_str), Some("window"));
+        assert_eq!(
+            event.get("action").and_then(Value::as_str),
+            Some("resize")
+        );
+        assert_eq!(
+            event.get("window_id").and_then(Value::as_str),
+            Some("0x789abc")
+        );
+        assert_eq!(
+            event.get("details").and_then(Value::as_object),
+            details.as_object()
+        );
+        assert!(event.get("timestamp").is_some());
+    }
+
+    #[test]
+    fn events_are_ordered_by_timestamp() {
+        let mut report = Report::new(
+            "test_target",
+            "test_scenario",
+            "startup_driven",
+            Path::new("/tmp"),
+        );
+        // Push events in a known order
+        report.push_lifecycle_event("prepare", "started");
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        report.push_lifecycle_event("launch", "started");
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        report.push_retry_event("discovery", 1, 3);
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        report.push_timeout_event("wait", 5);
+
+        assert_eq!(report.events.len(), 4);
+
+        // Extract timestamps and verify they are increasing
+        let timestamps: Vec<String> = report
+            .events
+            .iter()
+            .filter_map(|e| e.get("timestamp").and_then(Value::as_str).map(String::from))
+            .collect();
+
+        assert!(
+            timestamps.windows(2).all(|w| w[0] <= w[1]),
+            "timestamps should be in ascending order: {:?}",
+            timestamps
+        );
+    }
+
     #[test]
     fn multiple_events_are_accumulated_in_order() {
         let mut report = Report::new(
