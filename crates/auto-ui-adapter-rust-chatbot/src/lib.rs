@@ -2045,7 +2045,9 @@ fn wait_for_new_pid(
 fn stop_chatbot_pid(app_root: &Path, pid: i32) -> Result<()> {
     let mut cmd = Command::new(chatbot_ctl_path(app_root));
     cmd.arg("stop").arg(pid.to_string());
-    run_command(&mut cmd, false)?;
+    // Use check=true so that if chatbot-ctl stop fails (e.g., process already gone
+    // or permission denied), we propagate the error rather than silently ignoring it.
+    run_command(&mut cmd, true)?;
     Ok(())
 }
 
@@ -2057,7 +2059,7 @@ fn wait_for_pid_exit(app_root: &Path, pid: i32, timeout: Duration) -> Result<()>
         }
         thread::sleep(Duration::from_millis(200));
     }
-    Ok(())
+    bail!("Timed out after {:?} waiting for pid {} to exit", timeout, pid)
 }
 
 fn launch_targeted_session_window(
@@ -3094,6 +3096,69 @@ mod tests {
         let session = result.unwrap();
         assert_eq!(session.session_id, "abc123");
         assert_eq!(session.name, "Hidden Session");
+        std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[test]
+    fn stop_chatbot_pid_propagates_failure() {
+        // stop_chatbot_pid should return an error when chatbot-ctl stop fails
+        let temp = unique_temp_dir("stop-chatbot-pid-fail");
+        // Create a fake chatbot-ctl that exits with error code 1
+        let bin_dir = temp.join("target").join("release");
+        fs::create_dir_all(&bin_dir).unwrap();
+        let chatbot_ctl_path = bin_dir.join("chatbot-ctl");
+        // Exit with code 1 (failure) when trying to stop a pid
+        fs::write(&chatbot_ctl_path, "#!/bin/sh\nexit 1").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&chatbot_ctl_path, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        // Try to stop a fake pid - should fail because chatbot-ctl returns error
+        let result = stop_chatbot_pid(&temp, 12345);
+        assert!(
+            result.is_err(),
+            "stop_chatbot_pid should error when chatbot-ctl stop fails"
+        );
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("command failed") || err_msg.contains("failed"),
+            "error message should indicate command failure: {}",
+            err_msg
+        );
+        std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[test]
+    fn wait_for_pid_exit_returns_error_on_timeout() {
+        // wait_for_pid_exit should return an error when the pid doesn't exit within timeout
+        let temp = unique_temp_dir("wait-for-pid-timeout");
+        // Create a minimal .claude-desktop directory structure so require_release_binaries doesn't fail
+        let data_dir = temp.join(".claude-desktop");
+        fs::create_dir_all(&data_dir).unwrap();
+        // Create a fake chatbot-ctl that returns the pid we want to wait for forever
+        // The script sleeps for 10 seconds before exiting, simulating a long-running process
+        let bin_dir = temp.join("target").join("release");
+        fs::create_dir_all(&bin_dir).unwrap();
+        let chatbot_ctl_path = bin_dir.join("chatbot-ctl");
+        // This script will output the pid and then "sleep" forever (or at least longer than our test timeout)
+        fs::write(&chatbot_ctl_path, "#!/bin/sh\necho '999999'").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&chatbot_ctl_path, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        // Use the pid 999999 with a short timeout - since it never exits, we should get a timeout error
+        let result = wait_for_pid_exit(&temp, 999999, Duration::from_millis(100));
+        assert!(result.is_err(), "wait_for_pid_exit should error on timeout");
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Timed out") && err_msg.contains("999999"),
+            "error message should mention timeout and pid: {}",
+            err_msg
+        );
         std::fs::remove_dir_all(temp).ok();
     }
 }
