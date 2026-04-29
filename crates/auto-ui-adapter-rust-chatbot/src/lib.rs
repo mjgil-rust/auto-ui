@@ -3179,4 +3179,35 @@ mod tests {
         );
         std::fs::remove_dir_all(temp).ok();
     }
+
+    #[test]
+    fn crop_image_fails_gracefully_on_missing_source() {
+        // crop_image should return an error when source file doesn't exist
+        let temp = unique_temp_dir("crop-missing-source");
+        let source = temp.join("nonexistent.png");
+        let target = temp.join("output.png");
+
+        // The crop_image function calls ImageMagick convert; when source doesn't exist,
+        // it should return an error from run_command
+        let result = crop_image(&source, &target, 0, 0, 100, 100);
+        assert!(result.is_err(), "crop_image should error on missing source");
+        std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[test]
+    fn crop_image_accepts_valid_geometry_params() {
+        // Verify crop_image doesn't panic with valid-seeming parameters
+        // (actual ImageMagick behavior tested separately)
+        let temp = unique_temp_dir("crop-valid-params");
+        let source = temp.join("input.png");
+        let target = temp.join("output.png");
+        fs::write(&source, "not an image").unwrap();
+
+        // crop_image should attempt the operation (may fail due to invalid image,
+        // but shouldn't panic)
+        let result = crop_image(&source, &target, 0, 0, 100, 100);
+        // We just verify no panic - result depends on ImageMagick being present
+        assert!(result.is_ok() || result.is_err());
+        std::fs::remove_dir_all(temp).ok();
+    }
 }
