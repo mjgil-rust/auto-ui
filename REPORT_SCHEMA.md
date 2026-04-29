@@ -36,9 +36,13 @@ target/debug/auto-ui report-schema > report.schema.json
 Each `artifacts[]` entry has:
 
 - `kind`: stable artifact category such as `progress_log`, `summary_markdown`, or `window_screenshot`.
-- `path`: on-disk path written by the run.
+- `path`: on-disk path written by the run. Always absolute and normalized by `normalize_artifact_path()`.
 - `description`: optional human-readable label.
 - `metadata`: optional object for scenario-specific qualifiers such as variant or width.
+
+## Path Semantics
+
+Artifact paths in `artifacts[].path` are always absolute paths. Relative paths provided to `add_artifact()` are automatically resolved from the current working directory and canonicalized. This ensures reports contain portable, unambiguous path references.
 
 ## Compatibility Rules
 
