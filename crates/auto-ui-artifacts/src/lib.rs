@@ -39,7 +39,7 @@ pub struct Report {
     pub measurements: Vec<Value>,
     #[serde(default)]
     pub events: Vec<Value>,
-    #[serde(default, skip_serializing_if = "Value::is_null")]
+    #[serde(skip_serializing_if = "Value::is_null")]
     pub details: Value,
 }
 
@@ -61,7 +61,7 @@ impl Report {
             artifacts: Vec::new(),
             measurements: Vec::new(),
             events: Vec::new(),
-            details: Value::Null,
+            details: Value::Object(Default::default()),
         }
     }
 
