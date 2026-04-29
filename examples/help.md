@@ -10,14 +10,15 @@ Generic desktop UI automation helpers
 Usage: auto-ui <COMMAND>
 
 Commands:
-  debug           Run rust-chatbot debug session with window measurements
-  header-debug    Run rust-chatbot header debug with screenshot and crop metrics
-  run             Run a generic scenario from a TOML config file
-  report-schema   Print the JSON schema for report files
-  targets         List available automation targets (rust_chatbot, gpui_component_testing)
-  scenarios       List scenarios for a target (use --target to filter)
-  inspect         Inspect an existing report.json file
-  help            Print this message or the help of the given subcommand(s)
+  debug             Run rust-chatbot debug session with window measurements
+  header-debug      Run rust-chatbot header debug with screenshot and crop metrics
+  run               Run a generic scenario from a TOML config file
+  report-schema     Print the JSON schema for report files
+  targets           List available automation targets (rust_chatbot, gpui_component_testing)
+  scenarios         List scenarios for a target (use --target to filter)
+  scenario-schema   Print the JSON schema for scenario configuration files
+  inspect           Inspect an existing report.json file
+  help              Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help     Print help
@@ -111,6 +112,18 @@ Usage: auto-ui inspect --report <REPORT>
 Options:
       --report <REPORT>  Path to report.json file to inspect
   -h, --help             Print help
+```
+
+## `auto-ui scenario-schema --help`
+
+```text
+Print the JSON schema for scenario configuration files
+
+Usage: auto-ui scenario-schema [OPTIONS]
+
+Options:
+      --target <TARGET>  Target to show schemas for (rust_chatbot or gpui_component_testing). If omitted, shows schemas for all targets.
+  -h, --help            Print help
 ```
 
 ## Discovery helpers
