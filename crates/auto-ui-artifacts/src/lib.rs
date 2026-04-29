@@ -877,6 +877,10 @@ mod tests {
         report.finish_ok();
 
         let json = serde_json::to_value(&report).unwrap();
+
+        // Verify all required top-level fields are present
+        assert!(json.get("schema_version").is_some(), "schema_version required");
+        assert!(json.get("tool_version").is_some(), "tool_version required");
         assert_eq!(
             json.get("target").and_then(Value::as_str),
             Some("rust_chatbot")
@@ -884,7 +888,10 @@ mod tests {
         assert_eq!(json.get("scenario").and_then(Value::as_str), Some("debug"));
         assert_eq!(json.get("mode").and_then(Value::as_str), Some("hybrid"));
         assert_eq!(json.get("status").and_then(Value::as_str), Some("ok"));
-        assert!(json.get("artifacts").and_then(Value::as_array).is_some());
+        assert!(json.get("app_root").is_some());
+        assert!(json.get("run_id").is_some());
+        assert!(json.get("started_at").is_some());
+        assert!(json.get("finished_at").is_some());
         assert_eq!(
             json.get("artifacts")
                 .and_then(|a| a.as_array())
@@ -892,7 +899,23 @@ mod tests {
             Some(2)
         );
         assert!(json.get("events").and_then(Value::as_array).is_some());
-        assert!(json.get("details").and_then(Value::as_object).is_some());
+        assert!(json.get("measurements").and_then(Value::as_array).is_some());
+        // details must be present and non-null
+        assert!(
+            json.get("details").is_some(),
+            "details field must be present"
+        );
+        assert!(
+            !json.get("details").unwrap().is_null(),
+            "details must not be null"
+        );
+
+        // Verify artifact structure
+        let artifacts = json.get("artifacts").unwrap().as_array().unwrap();
+        for artifact in artifacts {
+            assert!(artifact.get("kind").is_some());
+            assert!(artifact.get("path").is_some());
+        }
     }
 
     #[test]
@@ -915,6 +938,8 @@ mod tests {
         report.finish_ok();
 
         let json = serde_json::to_value(&report).unwrap();
+
+        // Verify all required fields
         assert_eq!(
             json.get("scenario").and_then(Value::as_str),
             Some("header_debug")
@@ -925,6 +950,16 @@ mod tests {
                 .map(|arr| arr.len()),
             Some(3)
         );
+        // details must be present and an object
+        assert!(
+            json.get("details").is_some() && json.get("details").unwrap().is_object(),
+            "details must be a non-null object"
+        );
+
+        // Verify screenshot artifact has expected structure
+        let artifacts = json.get("artifacts").unwrap().as_array().unwrap();
+        let screenshot_art = artifacts.iter().find(|a| a.get("kind") == Some(&Value::String("screenshot".to_string())));
+        assert!(screenshot_art.is_some(), "screenshot artifact should exist");
     }
 
     #[test]
@@ -946,6 +981,8 @@ mod tests {
         report.finish_ok();
 
         let json = serde_json::to_value(&report).unwrap();
+
+        // Verify scenario and measurements
         assert_eq!(
             json.get("scenario").and_then(Value::as_str),
             Some("prompt_debug")
@@ -956,6 +993,19 @@ mod tests {
                 .and_then(|m| m.as_array())
                 .map(|arr| arr.len()),
             Some(2)
+        );
+
+        // Verify measurements have required fields
+        let measurements = json.get("measurements").unwrap().as_array().unwrap();
+        for m in measurements {
+            assert!(m.get("name").is_some(), "measurement should have name");
+            assert!(m.get("value").is_some(), "measurement should have value");
+        }
+
+        // details must be present
+        assert!(
+            json.get("details").is_some() && !json.get("details").unwrap().is_null(),
+            "details must be present and non-null"
         );
     }
 
@@ -977,6 +1027,8 @@ mod tests {
         report.finish_ok();
 
         let json = serde_json::to_value(&report).unwrap();
+
+        // Verify target, scenario, mode
         assert_eq!(
             json.get("target").and_then(Value::as_str),
             Some("gpui_component_testing")
@@ -989,6 +1041,19 @@ mod tests {
             json.get("mode").and_then(Value::as_str),
             Some("startup_driven")
         );
+
+        // Verify artifacts structure
+        assert_eq!(
+            json.get("artifacts")
+                .and_then(|a| a.as_array())
+                .map(|arr| arr.len()),
+            Some(2)
+        );
+
+        // Verify details has variants and run_ms
+        let details = json.get("details").unwrap();
+        assert!(details.get("variants").is_some());
+        assert!(details.get("run_ms").is_some());
     }
 
     #[test]
@@ -1008,9 +1073,29 @@ mod tests {
         report.finish_ok();
 
         let json = serde_json::to_value(&report).unwrap();
+
+        // Verify scenario and artifacts
         assert_eq!(
             json.get("scenario").and_then(Value::as_str),
             Some("scrollbar_trace")
+        );
+        assert_eq!(
+            json.get("artifacts")
+                .and_then(|a| a.as_array())
+                .map(|arr| arr.len()),
+            Some(2)
+        );
+
+        // Verify trace_csv artifact structure
+        let artifacts = json.get("artifacts").unwrap().as_array().unwrap();
+        let trace_art = artifacts.iter().find(|a| a.get("kind") == Some(&Value::String("trace_csv".to_string())));
+        assert!(trace_art.is_some(), "trace_csv artifact should exist");
+        assert!(trace_art.unwrap().get("path").is_some());
+
+        // details must be present
+        assert!(
+            json.get("details").is_some() && json.get("details").unwrap().is_object(),
+            "details must be a non-null object"
         );
     }
 
@@ -1037,10 +1122,31 @@ mod tests {
         report.finish_ok();
 
         let json = serde_json::to_value(&report).unwrap();
+
+        // Verify scenario and measurements
         assert_eq!(
             json.get("scenario").and_then(Value::as_str),
             Some("conversation_paint")
         );
         assert!(json.get("measurements").and_then(Value::as_array).is_some());
+
+        // Verify measurement has name and value
+        let measurements = json.get("measurements").unwrap().as_array().unwrap();
+        assert!(!measurements.is_empty());
+        for m in measurements {
+            assert!(m.get("name").is_some());
+            assert!(m.get("value").is_some());
+        }
+
+        // Verify conversation_csv artifact structure
+        let artifacts = json.get("artifacts").unwrap().as_array().unwrap();
+        let conv_art = artifacts.iter().find(|a| a.get("kind") == Some(&Value::String("conversation_csv".to_string())));
+        assert!(conv_art.is_some(), "conversation_csv artifact should exist");
+
+        // details must be present
+        assert!(
+            json.get("details").is_some() && !json.get("details").unwrap().is_null(),
+            "details must be present and non-null"
+        );
     }
 }
