@@ -1891,6 +1891,57 @@ fn load_session_by_id_from_map(
     })
 }
 
+/// Load a session by name from an already-parsed sessions map.
+/// Useful for testing with mock data.
+fn load_session_by_name_from_map(
+    sessions_map: Map<String, Value>,
+    provider: Provider,
+    session_name: &str,
+    include_hidden: bool,
+) -> Result<SessionEntry> {
+    let mut candidates: Vec<&Map<String, Value>> = sessions_map
+        .values()
+        .filter_map(|v| v.as_object())
+        .filter(|raw| {
+            raw.get("name")
+                .and_then(Value::as_str)
+                .map(|n| n == session_name)
+                .unwrap_or(false)
+        })
+        .filter(|raw| include_hidden || !raw.get("hidden").and_then(Value::as_bool).unwrap_or(false))
+        .collect();
+
+    if candidates.is_empty() {
+        bail!(
+            "Session named {session_name:?} was not found for provider {:?}.",
+            provider
+        );
+    }
+    // If multiple sessions have the same name (shouldn't happen), take the first one
+    let raw = candidates[0];
+    let id = raw
+        .get("id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("Session payload for {session_name} is missing an id"))?;
+    let name = raw
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("Session payload for {session_name} is missing a name"))?;
+    Ok(SessionEntry {
+        session_id: id.to_string(),
+        name: name.to_string(),
+        updated_at: raw
+            .get("updated_at")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
+        message_count: raw
+            .get("message_count")
+            .and_then(Value::as_i64)
+            .unwrap_or(0),
+    })
+}
+
 fn require_release_binaries(app_root: &Path, required_binaries: &[&str]) -> Result<()> {
     let not_executable: Vec<_> = required_binaries
         .iter()
@@ -2927,6 +2978,122 @@ mod tests {
         let result = load_session_by_id_from_map(sessions_map, Provider::Gemini, "abc123");
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("missing a name"));
+        std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[test]
+    fn load_session_by_name_found() {
+        let temp = unique_temp_dir("session-by-name-found");
+        let sessions_json = serde_json::json!({
+            "sessions": {
+                "abc123": {
+                    "id": "abc123",
+                    "name": "Test Session",
+                    "updated_at": "2024-01-15T10:30:00Z",
+                    "message_count": 42,
+                    "hidden": false
+                }
+            }
+        });
+        let sessions_map = create_mock_sessions_map(
+            Provider::Claude,
+            &temp,
+            &serde_json::to_string(&sessions_json).unwrap(),
+        );
+        let result =
+            load_session_by_name_from_map(sessions_map, Provider::Claude, "Test Session", false);
+        assert!(result.is_ok());
+        let session = result.unwrap();
+        assert_eq!(session.session_id, "abc123");
+        assert_eq!(session.name, "Test Session");
+        std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[test]
+    fn load_session_by_name_not_found() {
+        let temp = unique_temp_dir("session-by-name-not-found");
+        let sessions_json = serde_json::json!({
+            "sessions": {
+                "abc123": {
+                    "id": "abc123",
+                    "name": "Test Session",
+                    "updated_at": "2024-01-15T10:30:00Z",
+                    "message_count": 42,
+                    "hidden": false
+                }
+            }
+        });
+        let sessions_map = create_mock_sessions_map(
+            Provider::Claude,
+            &temp,
+            &serde_json::to_string(&sessions_json).unwrap(),
+        );
+        let result =
+            load_session_by_name_from_map(sessions_map, Provider::Claude, "Nonexistent", false);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("was not found"));
+        std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[test]
+    fn load_session_by_name_excludes_hidden() {
+        let temp = unique_temp_dir("session-by-name-hidden");
+        let sessions_json = serde_json::json!({
+            "sessions": {
+                "abc123": {
+                    "id": "abc123",
+                    "name": "Hidden Session",
+                    "updated_at": "2024-01-15T10:30:00Z",
+                    "message_count": 42,
+                    "hidden": true
+                }
+            }
+        });
+        let sessions_map = create_mock_sessions_map(
+            Provider::Codex,
+            &temp,
+            &serde_json::to_string(&sessions_json).unwrap(),
+        );
+        // With include_hidden=false, hidden session should not be found
+        let result =
+            load_session_by_name_from_map(sessions_map, Provider::Codex, "Hidden Session", false);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("was not found"));
+        std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[test]
+    fn load_session_by_name_includes_hidden_when_requested() {
+        let temp = unique_temp_dir("session-by-name-include-hidden");
+        let sessions_json = serde_json::json!({
+            "sessions": {
+                "abc123": {
+                    "id": "abc123",
+                    "name": "Hidden Session",
+                    "updated_at": "2024-01-15T10:30:00Z",
+                    "message_count": 42,
+                    "hidden": true
+                }
+            }
+        });
+        let sessions_map = create_mock_sessions_map(
+            Provider::Gemini,
+            &temp,
+            &serde_json::to_string(&sessions_json).unwrap(),
+        );
+        // With include_hidden=true, hidden session should be found
+        let result =
+            load_session_by_name_from_map(sessions_map, Provider::Gemini, "Hidden Session", true);
+        assert!(result.is_ok());
+        let session = result.unwrap();
+        assert_eq!(session.session_id, "abc123");
+        assert_eq!(session.name, "Hidden Session");
         std::fs::remove_dir_all(temp).ok();
     }
 }
