@@ -8,6 +8,10 @@ use anyhow::{anyhow, Context, Result};
 use auto_ui_core::{render_command, run_command};
 use serde::Serialize;
 
+mod fake_driver;
+
+pub use fake_driver::{FakeWindowDriver, FakeWindowState, FAKE_WINDOW_ID};
+
 #[derive(Clone, Debug, Serialize)]
 pub struct WindowGeometry {
     pub x: i32,
