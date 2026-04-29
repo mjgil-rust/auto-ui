@@ -68,13 +68,13 @@ impl Report {
     pub fn add_artifact(
         &mut self,
         kind: impl Into<String>,
-        path: impl Into<String>,
+        path: impl AsRef<Path>,
         description: Option<String>,
         metadata: Value,
     ) {
         self.artifacts.push(ArtifactRef {
             kind: kind.into(),
-            path: path.into(),
+            path: normalize_artifact_path(path.as_ref()),
             description,
             metadata,
         });
@@ -291,6 +291,30 @@ pub fn write_report(output_dir: &Path, report: &Report) -> Result<PathBuf> {
     fs::write(&report_path, serde_json::to_string_pretty(report)?)
         .with_context(|| format!("failed to write {}", report_path.display()))?;
     Ok(report_path)
+}
+
+/// Normalize an artifact path: convert to absolute path.
+/// Relative paths are resolved from the current working directory.
+/// Symlinks are resolved to their canonical form.
+pub fn normalize_artifact_path<P: AsRef<Path>>(path: P) -> String {
+    let p = path.as_ref();
+    // If already absolute, canonicalize it
+    if p.is_absolute() {
+        std::fs::canonicalize(p)
+            .map(|c| c.to_string_lossy().to_string())
+            .unwrap_or_else(|_| p.to_string_lossy().to_string())
+    } else {
+        // Resolve relative path from current directory, then canonicalize
+        std::env::current_dir()
+            .map(|cwd| cwd.join(p))
+            .and_then(|c| std::fs::canonicalize(&c))
+            .map(|c| c.to_string_lossy().to_string())
+            .unwrap_or_else(|_| {
+                std::env::current_dir()
+                    .map(|cwd| cwd.join(p).to_string_lossy().to_string())
+                    .unwrap_or_else(|_| p.to_string_lossy().to_string())
+            })
+    }
 }
 
 /// Validate that all artifact paths exist on disk.
@@ -1274,6 +1298,68 @@ mod tests {
         assert!(
             json.get("details").is_some() && !json.get("details").unwrap().is_null(),
             "details must be present and non-null"
+        );
+    }
+
+    #[test]
+    fn normalize_artifact_path_converts_to_absolute() {
+        let result = normalize_artifact_path("/tmp/test.log");
+        assert!(result.starts_with('/'), "should be absolute path: {}", result);
+    }
+
+    #[test]
+    fn normalize_artifact_path_resolves_relative() {
+        let result = normalize_artifact_path("test.log");
+        assert!(result.contains("test.log"), "should contain original name: {}", result);
+        assert!(result.starts_with('/'), "should be absolute: {}", result);
+    }
+
+    #[test]
+    fn normalize_artifact_path_handles_current_dir_prefix() {
+        let cwd = std::env::current_dir().unwrap();
+        let result = normalize_artifact_path("test.log");
+        // Result should be the absolute path of cwd/test.log
+        let expected_prefix = cwd.to_string_lossy().trim_end_matches('/').to_string() + "/";
+        assert!(
+            result.starts_with(&expected_prefix),
+            "expected prefix '{}', got: {}",
+            expected_prefix,
+            result
+        );
+        assert!(result.ends_with("test.log"), "should end with test.log: {}", result);
+    }
+
+    #[test]
+    fn report_artifacts_are_normalized_to_absolute_paths() {
+        let mut report = Report::new("rust_chatbot", "debug", "hybrid", Path::new("/tmp"));
+
+        // Add artifact with relative path - it should be normalized to absolute
+        report.add_artifact("progress_log", "relative/path/log.txt", None, Value::Null);
+
+        let json = serde_json::to_value(&report).unwrap();
+        let artifact_path = json
+            .get("artifacts")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .first()
+            .unwrap()
+            .get("path")
+            .unwrap()
+            .as_str()
+            .unwrap();
+
+        // The path should be absolute (starting with /)
+        assert!(
+            artifact_path.starts_with('/'),
+            "artifact path should be absolute, got: {}",
+            artifact_path
+        );
+        // And it should contain the filename
+        assert!(
+            artifact_path.ends_with("relative/path/log.txt") || artifact_path.ends_with("log.txt"),
+            "artifact path should contain log.txt: {}",
+            artifact_path
         );
     }
 
