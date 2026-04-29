@@ -14,6 +14,10 @@ auto-ui-adapter-rust-chatbot = { path = "../auto-ui-adapter-rust-chatbot" }
 auto-ui-artifacts = { path = "../auto-ui-artifacts" }
 auto-ui-core = { path = "../auto-ui-core" }
 clap.workspace = true
+serde = { workspace = true }
 serde_json.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

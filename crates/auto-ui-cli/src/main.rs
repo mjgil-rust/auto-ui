@@ -1,6 +1,7 @@
 pub mod debug_cmd;
 pub mod error_fmt;
 pub mod header_debug_cmd;
+pub mod inspect_report_cmd;
 pub mod logging;
 pub mod report_schema_cmd;
 pub mod run_cmd;
@@ -35,6 +36,8 @@ enum Command {
         #[arg(long)]
         target: Option<String>,
     },
+    /// Inspect an existing report.json file
+    Inspect(inspect_report_cmd::Args),
 }
 
 fn main() {
@@ -63,5 +66,6 @@ fn run() -> anyhow::Result<()> {
             run_cmd::print_scenarios(target.as_deref());
             Ok(())
         }
+        Command::Inspect(args) => inspect_report_cmd::run(args),
     }
 }
