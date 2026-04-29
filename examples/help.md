@@ -17,6 +17,7 @@ Commands:
   targets           List available automation targets (rust_chatbot, gpui_component_testing)
   scenarios         List scenarios for a target (use --target to filter)
   scenario-schema   Print the JSON schema for scenario configuration files
+  validate          Validate a TOML scenario configuration file
   inspect           Inspect an existing report.json file
   help              Print this message or the help of the given subcommand(s)
 
@@ -124,6 +125,18 @@ Usage: auto-ui scenario-schema [OPTIONS]
 Options:
       --target <TARGET>  Target to show schemas for (rust_chatbot or gpui_component_testing). If omitted, shows schemas for all targets.
   -h, --help            Print help
+```
+
+## `auto-ui validate --help`
+
+```text
+Validate a TOML scenario configuration file
+
+Usage: auto-ui validate --config <CONFIG>
+
+Options:
+      --config <CONFIG>  Path to TOML scenario configuration file to validate
+  -h, --help             Print help
 ```
 
 ## Discovery helpers
