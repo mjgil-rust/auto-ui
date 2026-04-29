@@ -37,7 +37,7 @@ Based on the uploaded repo and design/backlog files, I treated **“full complet
 | 26. Generate or publish machine-readable scenario schemas for each supported scenario                        | Complete   | Snapshot tests for generated schemas                                       | Scenario schema docs and examples                              |
 | 27. Keep TOML scenario names aligned with CLI scenario discovery                                             | Complete   | Tests comparing `scenario_names()` output to example files                 | Examples README and help snapshots must stay current           |
 | 28. Add a validation-only CLI mode for scenario files                                                        | Complete   | CLI tests for valid and invalid configs                                    | CLI docs must describe validation mode                         |
-| 29. Add scenario-level mode support where applicable: `startup_driven`, `interactive_window`, `hybrid`       | Incomplete | Tests that invalid mode/target combinations fail                           | Scenario reference must document modes                         |
+| 29. Add scenario-level mode support where applicable: `startup_driven`, `interactive_window`, `hybrid`       | Complete   | Tests that invalid mode/target combinations fail                           | Scenario reference must document modes                         |
 | 30. Document every scenario field for rust-chatbot and GPUI                                                  | Incomplete | Documentation-link or snapshot tests for generated reference if automated  | Complete scenario reference docs                               |
 
 ## Report schema and artifact model
