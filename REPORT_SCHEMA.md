@@ -31,6 +31,54 @@ target/debug/auto-ui report-schema > report.schema.json
 - `events`: timeline rows. Adapters may add keys inside each row.
 - `details`: adapter-specific structured JSON that stays nested instead of promoting every target-specific field to the top level.
 
+## Event Rows
+
+Each `events[]` entry has a `kind` field identifying the event type and a `timestamp` in RFC 3339 format. Adapters may add extra keys per event type.
+
+### Lifecycle Events (`kind: "lifecycle"`)
+
+Emitted for major lifecycle transitions:
+
+- `phase`: one of `prepare`, `launch`, `collect`, `stop`
+- `message`: human-readable description
+
+### Retry Events (`kind: "retry"`)
+
+Emitted when an operation is retried:
+
+- `operation`: name of the operation being retried (e.g., `window_discovery`)
+- `attempt`: current attempt number (1-indexed)
+- `max_attempts`: maximum attempts before giving up
+
+### Timeout Events (`kind: "timeout"`)
+
+Emitted when an operation times out:
+
+- `operation`: name of the operation that timed out
+- `timeout_secs`: configured timeout in seconds
+
+### Foreground Control Events (`kind: "foreground_control"`)
+
+Emitted for window activation and lowering:
+
+- `action`: one of `activate`, `lower`
+- `window_id`: X11 window ID
+
+### Import Events (`kind: "import"`)
+
+Emitted when artifacts are imported into the report:
+
+- `artifact_kind`: stable artifact category
+- `path`: on-disk path of the imported file
+
+### Window Events (`kind: "window"`)
+
+Emitted for window operations:
+
+- `action`: operation performed (e.g., `resize`, `screenshot`, `focus`)
+- `window_id`: X11 window ID
+- `details`: additional operation-specific data
+
 ## Artifact Rows
 
 Each `artifacts[]` entry has:
