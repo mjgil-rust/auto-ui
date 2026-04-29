@@ -3415,4 +3415,45 @@ echo "RUST_CHATBOT_START_SESSION_ID=$RUST_CHATBOT_START_SESSION_ID" >> "$2"
         assert!(result.is_err() || result.is_ok());
         std::fs::remove_dir_all(temp).ok();
     }
+
+    #[test]
+    fn parse_trace_fields_extracts_ai_response_end() {
+        let line = r#"2024-01-15T10:30:00.000Z ai_response_end session_id="abc123" duration_ms=500"#;
+        let fields = parse_trace_fields(line);
+        assert_eq!(fields.get("session_id").map(String::as_str), Some("abc123"));
+        assert_eq!(fields.get("duration_ms").map(String::as_str), Some("500"));
+    }
+
+    #[test]
+    fn parse_trace_fields_extracts_markdown_upgrade_latency() {
+        let line = r#"2024-01-15T10:30:00.000Z assistant_markdown_upgrade_latency session_id="abc123" latency_ms=150"#;
+        let fields = parse_trace_fields(line);
+        assert_eq!(fields.get("session_id").map(String::as_str), Some("abc123"));
+        assert_eq!(fields.get("latency_ms").map(String::as_str), Some("150"));
+    }
+
+    #[test]
+    fn parse_trace_fields_extracts_message_row_render_time() {
+        let line = r#"2024-01-15T10:30:00.000Z message_row_render_time session_id="abc123" rendered_as_markdown=true is_user=false is_tail_message=true duration_ms=75"#;
+        let fields = parse_trace_fields(line);
+        assert_eq!(fields.get("session_id").map(String::as_str), Some("abc123"));
+        assert_eq!(fields.get("rendered_as_markdown").map(String::as_str), Some("true"));
+        assert_eq!(fields.get("is_user").map(String::as_str), Some("false"));
+        assert_eq!(fields.get("is_tail_message").map(String::as_str), Some("true"));
+        assert_eq!(fields.get("duration_ms").map(String::as_str), Some("75"));
+    }
+
+    #[test]
+    fn parse_trace_fields_handles_quoted_session_id() {
+        let line = r#"2024-01-15T10:30:00.000Z ai_response_end session_id="my-session-xyz" duration_ms=300"#;
+        let fields = parse_trace_fields(line);
+        assert_eq!(fields.get("session_id").map(String::as_str), Some("my-session-xyz"));
+    }
+
+    #[test]
+    fn parse_trace_fields_handles_unquoted_session_id() {
+        let line = r#"2024-01-15T10:30:00.000Z ai_response_end session_id=unquoted-session duration_ms=200"#;
+        let fields = parse_trace_fields(line);
+        assert_eq!(fields.get("session_id").map(String::as_str), Some("unquoted-session"));
+    }
 }
