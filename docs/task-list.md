@@ -150,7 +150,7 @@ Based on the uploaded repo and design/backlog files, I treated **“full complet
 | 114. Add workspace/virtual-desktop non-interference checks where feasible                      | Incomplete | Driver tests or documented manual smoke tests                                   | Desktop coexistence docs                            |
 | 115. Make headless display startup clean up Xvfb on partial failure                            | Incomplete | Tests simulating lock-file failure and openbox failure                          | Headless docs                                       |
 | 116. Make headless test opt-in/ignored unless dependencies exist                               | Incomplete | `cargo test --workspace` should pass without Xvfb/openbox                       | Live-test docs                                      |
-| 117. Add screenshot/image metric tests without requiring real ImageMagick where possible       | Incomplete | Fake-command tests for `crop_metric`, `image_size`, screenshot failure          | Driver docs                                         |
+| 117. Add screenshot/image metric tests without requiring real ImageMagick where possible       | Complete   | Fake-command tests for `crop_metric`, `image_size`, screenshot failure          | Driver docs                                         |
 
 ## Observability, timeouts, and error model
 
