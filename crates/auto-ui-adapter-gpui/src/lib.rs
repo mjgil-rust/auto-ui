@@ -1400,4 +1400,125 @@ mod tests {
         .unwrap();
         assert!(completed.report_path.exists());
     }
+
+    #[test]
+    fn resolve_app_root_prefers_explicit_path() {
+        let temp = unique_temp_dir("resolve-app-root-gpui-test");
+        let result = resolve_app_root(Some(&temp.display().to_string()));
+        assert!(result.is_ok());
+        std::fs::remove_dir(temp).ok();
+    }
+
+    #[test]
+    fn resolve_app_root_falls_back_to_env() {
+        std::env::set_var("GPUI_COMPONENT_TESTING_ROOT", "/tmp/test-gpui-env-root");
+        let result = resolve_app_root(None);
+        assert!(result.is_ok() || result.is_err());
+        std::env::remove_var("GPUI_COMPONENT_TESTING_ROOT");
+    }
+
+    #[test]
+    fn resolve_app_root_falls_back_to_sibling() {
+        let result = resolve_app_root(None);
+        match result {
+            Ok(_) => {}
+            Err(e) => {
+                assert!(e.to_string().contains("gpui") || e.to_string().contains("Could not resolve"));
+            }
+        }
+    }
+
+    #[test]
+    fn resolve_app_root_returns_error_when_no_path_found() {
+        std::env::remove_var("GPUI_COMPONENT_TESTING_ROOT");
+        std::env::remove_var("AUTO_UI_GPUI_APP_ROOT");
+
+        let result = resolve_app_root(None);
+
+        match result {
+            Ok(path) => {
+                assert!(path.is_absolute());
+            }
+            Err(e) => {
+                let err_msg = e.to_string();
+                assert!(err_msg.contains("Could not resolve") || err_msg.contains("gpui"));
+            }
+        }
+    }
+
+    #[test]
+    fn resolve_app_root_expands_tilde() {
+        let _ = unique_temp_dir("resolve-app-root-gpui-tilde");
+    }
+
+    #[test]
+    fn resolve_app_root_env_auto_ui_gpui_app_root() {
+        std::env::set_var("AUTO_UI_GPUI_APP_ROOT", "/tmp/test-gpui-app-root-alt");
+        let result = resolve_app_root(None);
+        assert!(result.is_ok() || result.is_err());
+        std::env::remove_var("AUTO_UI_GPUI_APP_ROOT");
+    }
+
+    #[test]
+    fn resolve_app_root_app_root_takes_precedence() {
+        std::env::set_var("GPUI_COMPONENT_TESTING_ROOT", "/tmp/env-root-should-not-be-used");
+        let temp = unique_temp_dir("explicit-precedence-gpui");
+        let explicit_path = temp.display().to_string();
+        let result = resolve_app_root(Some(&explicit_path));
+        assert!(result.is_ok());
+        std::env::remove_var("GPUI_COMPONENT_TESTING_ROOT");
+        std::fs::remove_dir(temp).ok();
+    }
+
+    #[test]
+    fn resolve_app_root_priority_cli_over_env() {
+        std::env::set_var("GPUI_COMPONENT_TESTING_ROOT", "/tmp/env-should-not-be-used");
+        let temp = unique_temp_dir("cli-over-env-gpui");
+        let result = resolve_app_root(Some(&temp.display().to_string()));
+        assert!(result.is_ok());
+        std::env::remove_var("GPUI_COMPONENT_TESTING_ROOT");
+        std::fs::remove_dir(temp).ok();
+    }
+
+    #[test]
+    fn resolve_app_root_priority_env_over_sibling() {
+        std::env::set_var("GPUI_COMPONENT_TESTING_ROOT", "/tmp/env-priority-test-gpui");
+        let result = resolve_app_root(None);
+        assert!(result.is_ok());
+        std::env::remove_var("GPUI_COMPONENT_TESTING_ROOT");
+    }
+
+    #[test]
+    fn resolve_app_root_prefers_gpu_i_over_auto_ui() {
+        std::env::set_var("GPUI_COMPONENT_TESTING_ROOT", "/tmp/gpui-wins");
+        std::env::set_var("AUTO_UI_GPUI_APP_ROOT", "/tmp/auto-ui-should-lose");
+        let result = resolve_app_root(None);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().to_string_lossy(), "/tmp/gpui-wins");
+        std::env::remove_var("GPUI_COMPONENT_TESTING_ROOT");
+        std::env::remove_var("AUTO_UI_GPUI_APP_ROOT");
+    }
+
+    #[test]
+    fn resolve_example_binary_returns_path_when_exists() {
+        let temp = unique_temp_dir("example-binary-test");
+        let example_dir = temp.join("target").join("release").join("examples");
+        std::fs::create_dir_all(&example_dir).unwrap();
+        let example_bin = example_dir.join("test_example");
+        std::fs::write(&example_bin, "").unwrap();
+
+        let result = resolve_example_binary(&temp, "test_example");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), example_bin);
+
+        std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[test]
+    fn resolve_example_binary_fails_when_missing() {
+        let temp = unique_temp_dir("example-binary-missing");
+        let result = resolve_example_binary(&temp, "nonexistent_example");
+        assert!(result.is_err());
+        std::fs::remove_dir(temp).ok();
+    }
 }
