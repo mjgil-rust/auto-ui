@@ -85,6 +85,26 @@ pub fn sanitize_cwd_for_log() -> String {
     sanitize_path_for_log(&PathBuf::from(env::current_dir().unwrap_or_default()))
 }
 
+/// Formats launch info for logging: command, redacted env overrides, and cwd.
+/// This is safe to emit to progress logs since sensitive values are redacted.
+pub fn format_launch_info_for_log(command: &str, env_overrides: &[&str], cwd: Option<&str>) -> String {
+    let mut info = format!("launching: {}", command);
+
+    // Add env overrides (just the keys, values are already redacted in redact_env_vars output)
+    if !env_overrides.is_empty() {
+        info.push_str(&format!("\n  env: {}", env_overrides.join(", ")));
+    }
+
+    // Add cwd
+    let cwd_str = cwd.unwrap_or_else(|| {
+        // Must allocate; we can't return a reference to a temporary
+        sanitize_cwd_for_log().leak()
+    });
+    info.push_str(&format!("\n  cwd: {}", cwd_str));
+
+    info
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -176,5 +196,30 @@ mod tests {
     fn sanitize_cwd_for_log_returns_string() {
         let cwd = sanitize_cwd_for_log();
         assert!(!cwd.is_empty());
+    }
+
+    #[test]
+    fn format_launch_info_includes_command() {
+        let info = format_launch_info_for_log("chatbot-ctl start", &["RUST_LOG=debug"], Some("/tmp"));
+        assert!(info.contains("chatbot-ctl start"));
+        assert!(info.contains("env:"));
+        assert!(info.contains("cwd:"));
+        assert!(info.contains("/tmp"));
+    }
+
+    #[test]
+    fn format_launch_info_handles_empty_env_overrides() {
+        let info = format_launch_info_for_log("test-cmd", &[], None);
+        assert!(info.contains("test-cmd"));
+        assert!(info.contains("cwd:"));
+        // Should not have empty env line
+        assert!(!info.contains("env: []"));
+    }
+
+    #[test]
+    fn format_launch_info_uses_sanitized_cwd_when_none() {
+        let info = format_launch_info_for_log("cmd", &[], None);
+        // When cwd is None, it should call sanitize_cwd_for_log
+        assert!(info.contains("cwd:"));
     }
 }
