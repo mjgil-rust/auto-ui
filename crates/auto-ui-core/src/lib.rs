@@ -3,6 +3,7 @@ mod display;
 mod adapter_registry;
 pub mod errors;
 pub mod retry;
+pub mod safe_log;
 mod startup_orchestration;
 mod interactive_window_orchestration;
 mod hybrid_orchestration;
@@ -34,6 +35,9 @@ pub use errors::{
     TraceTimeoutError, WindowNotFoundError, WindowOperationError,
 };
 pub use retry::{retry_with_backoff, RetryConfig, RetryError, trace_wait_config, window_discovery_config};
+pub use safe_log::{
+    redact_command_args, redact_env_var, redact_env_vars, sanitize_cwd_for_log, sanitize_path_for_log,
+};
 pub use startup_orchestration::{run_startup_scenario, StartupOrchestrationConfig, StartupOrchestrator};
 pub use interactive_window_orchestration::{
     InteractiveOrchestrationConfig, InteractiveWindowOrchestrator, WindowGeometry, WindowState,
