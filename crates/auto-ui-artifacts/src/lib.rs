@@ -293,6 +293,26 @@ pub fn write_report(output_dir: &Path, report: &Report) -> Result<PathBuf> {
     Ok(report_path)
 }
 
+/// Validate that all artifact paths exist on disk.
+/// Returns Ok(()) if all artifacts exist, or Err with details about missing ones.
+pub fn validate_artifacts(report: &Report) -> Result<()> {
+    let mut missing = Vec::new();
+    for artifact in &report.artifacts {
+        if !Path::new(&artifact.path).exists() {
+            missing.push(artifact.path.clone());
+        }
+    }
+    if missing.is_empty() {
+        Ok(())
+    } else {
+        anyhow::bail!(
+            "missing {} artifact(s): {}",
+            missing.len(),
+            missing.join(", ")
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1148,5 +1168,66 @@ mod tests {
             json.get("details").is_some() && !json.get("details").unwrap().is_null(),
             "details must be present and non-null"
         );
+    }
+
+    #[test]
+    fn validate_artifacts_succeeds_when_all_exist() {
+        let mut report = Report::new("rust_chatbot", "debug", "hybrid", Path::new("/tmp"));
+
+        // Create temp files for artifacts
+        let temp_dir = unique_temp_dir("artifact-validation");
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let progress_path = temp_dir.join("progress.log");
+        let trace_path = temp_dir.join("trace.log");
+        fs::write(&progress_path, "log content").unwrap();
+        fs::write(&trace_path, "trace content").unwrap();
+
+        report.add_artifact("progress_log", progress_path.to_str().unwrap(), None, Value::Null);
+        report.add_artifact("trace_log", trace_path.to_str().unwrap(), None, Value::Null);
+
+        let result = validate_artifacts(&report);
+        assert!(result.is_ok(), "should succeed when all artifacts exist: {:?}", result);
+
+        // Cleanup
+        let _ = fs::remove_file(progress_path);
+        let _ = fs::remove_file(trace_path);
+        let _ = fs::remove_dir(temp_dir);
+    }
+
+    #[test]
+    fn validate_artifacts_fails_when_missing() {
+        let mut report = Report::new("rust_chatbot", "debug", "hybrid", Path::new("/tmp"));
+        report.add_artifact("progress_log", "/tmp/nonexistent/path/log.txt", None, Value::Null);
+        report.add_artifact("trace_log", "/tmp/also/missing/trace.log", None, Value::Null);
+
+        let result = validate_artifacts(&report);
+        assert!(result.is_err(), "should fail when artifacts are missing");
+
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("missing"), "error should mention 'missing'");
+        assert!(err_msg.contains("2"), "error should mention count of missing artifacts");
+    }
+
+    #[test]
+    fn validate_artifacts_single_missing_reports_count() {
+        let mut report = Report::new("rust_chatbot", "debug", "hybrid", Path::new("/tmp"));
+        report.add_artifact("progress_log", "/tmp/exists.log", None, Value::Null);
+        report.add_artifact("trace_log", "/tmp/does_not_exist.log", None, Value::Null);
+
+        let result = validate_artifacts(&report);
+        assert!(result.is_err());
+
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("missing"), "error should mention 'missing'");
+        assert!(err_msg.contains("/tmp/does_not_exist.log"), "should include the missing path");
+    }
+
+    #[test]
+    fn validate_artifacts_empty_report_succeeds() {
+        let report = Report::new("rust_chatbot", "debug", "hybrid", Path::new("/tmp"));
+        // No artifacts - should succeed
+        let result = validate_artifacts(&report);
+        assert!(result.is_ok(), "empty artifacts list should pass validation");
     }
 }
