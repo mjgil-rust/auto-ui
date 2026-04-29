@@ -107,7 +107,8 @@ session, built target app binaries, and explicit env vars.
 
 - Set `AUTO_UI_RUN_LIVE_TESTS=1` to opt in.
 - Rust Chatbot tests also require `AUTO_UI_TEST_RUST_CHATBOT_ROOT` and
-  `AUTO_UI_TEST_RUST_CHATBOT_SESSION_ID`.
+  `AUTO_UI_TEST_RUST_CHATBOT_SESSION_ID`. These cover `debug`,
+  `header_debug`, and `prompt_debug` scenarios.
 - GPUI tests require `AUTO_UI_TEST_GPUI_ROOT` and cover `scroll_matrix`,
   `scrollbar_trace`, and `conversation_paint`.
 
