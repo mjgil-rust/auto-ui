@@ -2281,6 +2281,23 @@ fn parse_trace_fields(line: &str) -> TraceFields {
     fields
 }
 
+/// Extract session_id from a trace line, checking both quoted and unquoted forms.
+fn extract_session_id_from_line(line: &str) -> Option<String> {
+    // Try quoted form first: session_id="abc123"
+    static QUOTED_RE: OnceLock<Regex> = OnceLock::new();
+    let quoted_re = QUOTED_RE.get_or_init(|| Regex::new(r#"session_id="([^"]+)""#).unwrap());
+    if let Some(caps) = quoted_re.captures(line) {
+        return Some(caps.get(1).unwrap().as_str().to_string());
+    }
+    // Try unquoted form: session_id=abc123
+    static UNQUOTED_RE: OnceLock<Regex> = OnceLock::new();
+    let unquoted_re = UNQUOTED_RE.get_or_init(|| Regex::new(r#"session_id=(\S+)"#).unwrap());
+    if let Some(caps) = unquoted_re.captures(line) {
+        return Some(caps.get(1).unwrap().as_str().to_string());
+    }
+    None
+}
+
 fn wait_for_trace_bundle(
     log_path: &Path,
     offset: u64,
@@ -2300,8 +2317,13 @@ fn wait_for_trace_bundle(
         let mut saw_new_relevant_line = false;
         for line in lines {
             if line.contains("ui_auto_debug_code_block") {
-                code_blocks.push(parse_trace_fields(&line));
-                saw_new_relevant_line = true;
+                // Filter code_block rows by session_id (Task #73)
+                if let Some(line_session_id) = extract_session_id_from_line(&line) {
+                    if line_session_id == session_id {
+                        code_blocks.push(parse_trace_fields(&line));
+                        saw_new_relevant_line = true;
+                    }
+                }
                 continue;
             }
             if line.contains("ui_auto_debug") && line.contains(&format!("session_id={session_id}"))
@@ -3209,5 +3231,34 @@ mod tests {
         // We just verify no panic - result depends on ImageMagick being present
         assert!(result.is_ok() || result.is_err());
         std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[test]
+    fn extract_session_id_from_line_handles_quoted_form() {
+        let line = r#"2024-01-15T10:30:00.000Z ui_auto_debug_code_block session_id="abc123" index=1"#;
+        let session_id = extract_session_id_from_line(line);
+        assert_eq!(session_id, Some("abc123".to_string()));
+    }
+
+    #[test]
+    fn extract_session_id_from_line_handles_unquoted_form() {
+        let line = r#"2024-01-15T10:30:00.000Z ui_auto_debug_code_block session_id=xyz789 index=2"#;
+        let session_id = extract_session_id_from_line(line);
+        assert_eq!(session_id, Some("xyz789".to_string()));
+    }
+
+    #[test]
+    fn extract_session_id_from_line_returns_none_when_missing() {
+        let line = r#"2024-01-15T10:30:00.000Z some_other_event action=start"#;
+        let session_id = extract_session_id_from_line(line);
+        assert_eq!(session_id, None);
+    }
+
+    #[test]
+    fn extract_session_id_from_line_handles_mixed_quoting() {
+        // Line with quoted session_id alongside unquoted values
+        let line = r#"session_id="my-session" token=sk-ant-key value=plain"#;
+        let session_id = extract_session_id_from_line(line);
+        assert_eq!(session_id, Some("my-session".to_string()));
     }
 }
