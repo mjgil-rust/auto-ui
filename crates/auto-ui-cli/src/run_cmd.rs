@@ -221,4 +221,32 @@ mod tests {
                 .to_string();
         assert!(err.contains("thread") || err.contains("required"));
     }
+
+    #[test]
+    fn rust_chatbot_scenario_names_match_toml_files() {
+        // Verify scenario_names() output aligns with rust-chatbot TOML files
+        let expected = &["debug", "header_debug", "prompt_debug"];
+        assert_eq!(rust_chatbot::scenario_names(), expected);
+    }
+
+    #[test]
+    fn gpui_scenario_names_match_toml_files() {
+        // Verify scenario_names() output aligns with gpui TOML files
+        let expected = &["scroll_matrix", "scrollbar_trace", "conversation_paint"];
+        assert_eq!(gpui::scenario_names(), expected);
+    }
+
+    #[test]
+    fn all_example_toml_files_validate() {
+        // All TOML files in examples/ should validate successfully
+        let examples_dir = repo_root().join("examples");
+        for entry in std::fs::read_dir(examples_dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("toml") {
+                let relative = path.strip_prefix(&repo_root()).unwrap();
+                validate_example(relative.to_str().unwrap()).unwrap();
+            }
+        }
+    }
 }
