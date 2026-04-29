@@ -10,12 +10,14 @@ Generic desktop UI automation helpers
 Usage: auto-ui <COMMAND>
 
 Commands:
-  debug
-  header-debug
-  run
-  targets
-  scenarios
-  help          Print this message or the help of the given subcommand(s)
+  debug           Run rust-chatbot debug session with window measurements
+  header-debug    Run rust-chatbot header debug with screenshot and crop metrics
+  run             Run a generic scenario from a TOML config file
+  report-schema   Print the JSON schema for report files
+  targets         List available automation targets (rust_chatbot, gpui_component_testing)
+  scenarios       List scenarios for a target (use --target to filter)
+  inspect         Inspect an existing report.json file
+  help            Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help     Print help
@@ -25,6 +27,8 @@ Options:
 ## `auto-ui debug --help`
 
 ```text
+Run rust-chatbot debug session with window measurements
+
 Usage: auto-ui debug [OPTIONS]
 
 Options:
@@ -58,22 +62,24 @@ Options:
 ## `auto-ui header-debug --help`
 
 ```text
+Run rust-chatbot header debug with screenshot and crop metrics
+
 Usage: auto-ui header-debug [OPTIONS]
 
 Options:
-      --app-root <APP_ROOT>
+      --app-root <APP_ROOT>              Path to rust-chatbot root (overrides AUTO_UI_APP_ROOT env var)
       --provider <PROVIDER>              [default: codex] [possible values: claude, codex, gemini]
-      --instance <INSTANCE>
-      --session-id <SESSION_ID>
-      --session-name <SESSION_NAME>
-      --include-hidden
+      --instance <INSTANCE>              Provider instance identifier
+      --session-id <SESSION_ID>          Start in a specific session by ID
+      --session-name <SESSION_NAME>      Start in a specific session by name (for header debug)
+      --include-hidden                   Include hidden sessions in session list
       --widths <WIDTHS>                  [default: 520,900,1000]
       --height <HEIGHT>                  [default: 900]
       --header-height <HEADER_HEIGHT>    [default: 140]
       --window-timeout <WINDOW_TIMEOUT>  [default: 15]
       --trace-timeout <TRACE_TIMEOUT>    [default: 8]
       --settle <SETTLE>                  [default: 0.8]
-      --output-dir <OUTPUT_DIR>
+      --output-dir <OUTPUT_DIR>          Output directory for artifacts
       --keep-front                       Do not lower the launched window behind other windows.
   -h, --help                             Print help
 ```
@@ -81,14 +87,30 @@ Options:
 ## `auto-ui run --help`
 
 ```text
+Run a generic scenario from a TOML config file
+
 Usage: auto-ui run [OPTIONS] --config <CONFIG>
 
 Options:
-      --config <CONFIG>
-      --target <TARGET>
-      --scenario <SCENARIO>
-      --output-dir <OUTPUT_DIR>
-  -h, --help                     Print help
+      --config <CONFIG>              Path to TOML scenario configuration file
+      --target <TARGET>              Target to run (rust_chatbot or gpui_component_testing). Overrides the target field in the TOML file.
+      --scenario <SCENARIO>          Scenario to run within the target. Overrides the scenario field in the TOML file.
+      --output-dir <OUTPUT_DIR>      Output directory for artifacts and reports. Defaults to a unique timestamped directory.
+      --headless                     Run on a private Xvfb display with openbox so no windows appear on the user's real screen. Requires Xvfb and openbox to be installed
+      --geometry <GEOMETRY>          Xvfb screen geometry (default: 1280x800x24). Only used with --headless [default: 1280x800x24]
+  -h, --help                         Print help
+```
+
+## `auto-ui inspect --help`
+
+```text
+Inspect an existing report.json file
+
+Usage: auto-ui inspect --report <REPORT>
+
+Options:
+      --report <REPORT>  Path to report.json file to inspect
+  -h, --help             Print help
 ```
 
 ## Discovery helpers
@@ -111,10 +133,31 @@ gpui_component_testing
 Current `scenarios` output:
 
 ```text
-rust_chatbot:
+Available scenarios:
+  rust_chatbot (3 scenarios)
+    debug
+    header_debug
+    prompt_debug
+  gpui_component_testing (3 scenarios)
+    scroll_matrix
+    scrollbar_trace
+    conversation_paint
+```
+
+Filtered `scenarios --target rust_chatbot`:
+
+```text
+rust_chatbot scenarios:
   debug
   header_debug
-gpui_component_testing:
+  prompt_debug
+```
+
+Filtered `scenarios --target gpui_component_testing`:
+
+```text
+gpui_component_testing scenarios:
   scroll_matrix
   scrollbar_trace
+  conversation_paint
 ```
