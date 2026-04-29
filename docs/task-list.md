@@ -149,7 +149,7 @@ Based on the uploaded repo and design/backlog files, I treated **“full complet
 | 113. Avoid global shortcuts and clipboard usage unless explicitly configured                   | Incomplete | Driver tests or policy tests for prohibited default actions                     | Desktop coexistence docs                            |
 | 114. Add workspace/virtual-desktop non-interference checks where feasible                      | Incomplete | Driver tests or documented manual smoke tests                                   | Desktop coexistence docs                            |
 | 115. Make headless display startup clean up Xvfb on partial failure                            | Incomplete | Tests simulating lock-file failure and openbox failure                          | Headless docs                                       |
-| 116. Make headless test opt-in/ignored unless dependencies exist                               | Incomplete | `cargo test --workspace` should pass without Xvfb/openbox                       | Live-test docs                                      |
+| 116. Make headless test opt-in/ignored unless dependencies exist                               | Complete   | `cargo test --workspace` should pass without Xvfb/openbox                       | Live-test docs                                      |
 | 117. Add screenshot/image metric tests without requiring real ImageMagick where possible       | Complete   | Fake-command tests for `crop_metric`, `image_size`, screenshot failure          | Driver docs                                         |
 
 ## Observability, timeouts, and error model
@@ -190,7 +190,7 @@ Based on the uploaded repo and design/backlog files, I treated **“full complet
 | 144. Add docs/example consistency tests                                                   | Complete   | Tests that every documented example config validates           | Examples docs must stay aligned                 |
 | 145. Add CI workflow for ordinary unit/integration tests                                  | Complete   | CI must run non-live tests                                     | CONTRIBUTING or README test docs                |
 | 146. Add documented opt-in path for live desktop tests                                    | Incomplete | CI/manual docs for `AUTO_UI_RUN_LIVE_TESTS=1`                  | README live-test section                        |
-| 147. Ensure ordinary tests do not require desktop, Xvfb, openbox, or target app checkouts | Incomplete | `cargo test --workspace` without optional deps must pass       | Test docs                                       |
+| 147. Ensure ordinary tests do not require desktop, Xvfb, openbox, or target app checkouts | Complete   | `cargo test --workspace` without optional deps must pass       | Test docs                                       |
 | 148. Add compile/check task for all workspace crates                                      | Complete   | CI `cargo check --workspace` or equivalent                     | README/dev docs                                 |
 | 149. Add clippy/rustfmt quality gates if desired                                          | Complete   | CI clippy/rustfmt jobs                                         | CONTRIBUTING/dev docs                           |
 
