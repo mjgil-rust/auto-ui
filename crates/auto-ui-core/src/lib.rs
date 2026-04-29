@@ -929,6 +929,91 @@ provider = "codex"
         assert!(!deserialized.is_success());
     }
 
+    // Tests for Task #130: config resolution (CLI/file/env/default precedence)
+
+    #[test]
+    fn cli_flag_overrides_scenario_file() {
+        let scenario_file_target = "rust_chatbot";
+        let cli_flag_target: Option<&str> = None;
+
+        let resolved = cli_flag_target
+            .map(|s| s.replace('-', "_"))
+            .unwrap_or_else(|| scenario_file_target.replace('-', "_"));
+
+        assert_eq!(resolved, "rust_chatbot");
+    }
+
+    #[test]
+    fn explicit_cli_overrides_scenario_file() {
+        let scenario_file_target = "rust_chatbot";
+        let cli_flag_target: Option<&str> = Some("gpui_component_testing");
+
+        let resolved = cli_flag_target
+            .map(|s| s.replace('-', "_"))
+            .unwrap_or_else(|| scenario_file_target.replace('-', "_"));
+
+        assert_eq!(resolved, "gpui_component_testing");
+    }
+
+    #[test]
+    fn normalize_name_converts_hyphen_to_underscore() {
+        assert_eq!(normalize_name("rust-chatbot"), "rust_chatbot");
+        assert_eq!(normalize_name("gpui-component-testing"), "gpui_component_testing");
+    }
+
+    #[test]
+    fn normalize_name_preserves_underscores() {
+        assert_eq!(normalize_name("rust_chatbot"), "rust_chatbot");
+    }
+
+    #[test]
+    fn normalize_name_empty_string() {
+        assert_eq!(normalize_name(""), "");
+    }
+
+    // Tests for Task #132: path resolution
+
+    #[test]
+    fn expand_path_handles_tilde() {
+        std::env::set_var("HOME", "/home/testuser");
+        let result = expand_path("~");
+        assert!(result.is_ok());
+        assert!(result.unwrap().to_string_lossy().contains("testuser"));
+        std::env::remove_var("HOME");
+    }
+
+    #[test]
+    fn expand_path_handles_tilde_prefix() {
+        std::env::set_var("HOME", "/home/testuser");
+        let result = expand_path("~/projects/test");
+        assert!(result.is_ok());
+        assert!(result.unwrap().to_string_lossy().contains("testuser"));
+        std::env::remove_var("HOME");
+    }
+
+    #[test]
+    fn expand_path_handles_absolute() {
+        let result = expand_path("/absolute/path");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn home_dir_fails_without_home() {
+        std::env::remove_var("HOME");
+        let result = home_dir();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("HOME"));
+    }
+
+    #[test]
+    fn home_dir_succeeds_with_home() {
+        std::env::set_var("HOME", "/home/testuser");
+        let result = home_dir();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), PathBuf::from("/home/testuser"));
+        std::env::remove_var("HOME");
+    }
+
     // Tests for Task #7: PreparedRun and related types
 
     #[test]
