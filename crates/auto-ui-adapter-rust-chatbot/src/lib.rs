@@ -1670,8 +1670,17 @@ fn run_width_session(
     })();
 
     if let Some(launched_pid) = launched_pid {
-        stop_chatbot_pid(app_root, launched_pid)?;
-        wait_for_pid_exit(app_root, launched_pid, seconds(config.window_timeout))?;
+        let stop_result = stop_chatbot_pid(app_root, launched_pid).and_then(|_| {
+            wait_for_pid_exit(app_root, launched_pid, seconds(config.window_timeout))
+        });
+        if result.is_ok() {
+            stop_result?;
+        } else if let Err(err) = stop_result {
+            let _ = log_line(
+                format!("warning: failed to stop launched_pid={launched_pid}: {err:#}"),
+                Some(&progress_path),
+            );
+        }
     }
 
     result
