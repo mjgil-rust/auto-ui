@@ -56,8 +56,15 @@ pub struct CommandOutput {
     pub stderr: String,
 }
 
+/// Supported scenario file format versions.
+pub const SUPPORTED_SCENARIO_VERSIONS: &[&str] = &["1"];
+
+/// Current scenario file format version.
+pub const CURRENT_SCENARIO_VERSION: &str = "1";
+
 #[derive(Clone, Debug)]
 pub struct ScenarioFile {
+    pub version: String,
     pub target: String,
     pub scenario: String,
     pub output_dir: Option<String>,
@@ -592,6 +599,22 @@ pub fn parse_scenario_file(path: &Path) -> Result<ScenarioFile> {
     let toml_value: toml::Value =
         toml::from_str(&text).with_context(|| format!("failed to parse {}", path.display()))?;
     let json_value = serde_json::to_value(toml_value)?;
+
+    let version = json_value
+        .get("version")
+        .and_then(Value::as_str)
+        .unwrap_or(CURRENT_SCENARIO_VERSION)
+        .to_string();
+
+    if !SUPPORTED_SCENARIO_VERSIONS.contains(&version.as_str()) {
+        bail!(
+            "{} uses scenario format version {} but only versions {} are supported",
+            path.display(),
+            version,
+            SUPPORTED_SCENARIO_VERSIONS.join(", ")
+        );
+    }
+
     let target = json_value
         .get("target")
         .and_then(Value::as_str)
@@ -610,12 +633,14 @@ pub fn parse_scenario_file(path: &Path) -> Result<ScenarioFile> {
     // Strip top-level metadata fields that are not adapter-specific config
     let mut adapter_value = json_value.clone();
     adapter_value.as_object_mut().map(|obj| {
+        obj.remove("version");
         obj.remove("target");
         obj.remove("scenario");
         obj.remove("output_dir");
     });
 
     Ok(ScenarioFile {
+        version,
         target,
         scenario,
         output_dir,
@@ -659,6 +684,7 @@ mod tests {
         fs::write(
             &path,
             r#"
+version = "1"
 target = "rust_chatbot"
 scenario = "debug"
 output_dir = "tmp/example"
@@ -669,6 +695,7 @@ provider = "codex"
         .unwrap();
 
         let scenario = parse_scenario_file(&path).unwrap();
+        assert_eq!(scenario.version, "1");
         assert_eq!(scenario.target, "rust_chatbot");
         assert_eq!(scenario.scenario, "debug");
         assert_eq!(scenario.output_dir.as_deref(), Some("tmp/example"));
@@ -680,6 +707,38 @@ provider = "codex"
                 .and_then(Value::as_str),
             Some("codex")
         );
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn parse_scenario_file_defaults_version_to_current() {
+        let path = unique_temp_path("no-version");
+        fs::write(&path, "target = \"rust_chatbot\"\nscenario = \"debug\"\n").unwrap();
+
+        let scenario = parse_scenario_file(&path).unwrap();
+        assert_eq!(scenario.version, CURRENT_SCENARIO_VERSION);
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn parse_scenario_file_rejects_unknown_version() {
+        let path = unique_temp_path("unknown-version");
+        fs::write(
+            &path,
+            r#"
+version = "999"
+target = "rust_chatbot"
+scenario = "debug"
+"#,
+        )
+        .unwrap();
+
+        let err = parse_scenario_file(&path).unwrap_err().to_string();
+        assert!(err.contains("scenario format version"));
+        assert!(err.contains("999"));
+        assert!(err.contains("supported"));
 
         let _ = fs::remove_file(path);
     }

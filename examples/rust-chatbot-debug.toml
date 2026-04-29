@@ -1,3 +1,4 @@
+version = "1"
 target = "rust_chatbot"
 scenario = "debug"
 

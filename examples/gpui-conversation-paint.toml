@@ -1,3 +1,4 @@
+version = "1"
 target = "gpui_component_testing"
 scenario = "conversation_paint"
 
