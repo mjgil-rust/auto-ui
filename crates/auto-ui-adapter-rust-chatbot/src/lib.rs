@@ -1100,6 +1100,13 @@ pub fn run_prompt_debug(config: PromptDebugConfig) -> Result<CompletedRun> {
             "upgrade_events": prompt_result.upgrade_events,
             "last_markdown_row": prompt_result.last_markdown_row,
         }));
+        report.set_details(json!({
+            "provider": config.provider.as_str(),
+            "session_id": config.session_id,
+            "prompt": config.prompt,
+            "width": config.width,
+            "height": config.height,
+        }));
         report.finish_ok();
         let report_path = write_report(&output_dir, &report)?;
         println!("wrote {}", report_path.display());
