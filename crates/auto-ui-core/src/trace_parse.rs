@@ -189,4 +189,45 @@ mod tests {
         assert_eq!(fields.get("width"), Some(&"1280".to_string()));
         assert_eq!(fields.get("count"), Some(&"42".to_string()));
     }
+
+    #[test]
+    fn parse_trace_fields_empty_quoted_value() {
+        let line = r#"session_id="" action=start"#;
+        let fields = parse_trace_fields(line);
+        assert_eq!(fields.get("session_id"), Some(&"".to_string()));
+        assert_eq!(fields.get("action"), Some(&"start".to_string()));
+    }
+
+    #[test]
+    fn parse_trace_fields_malformed_incomplete_quote() {
+        let line = r#"session_id="abc action=start"#;
+        let fields = parse_trace_fields(line);
+        // Should capture what it can - the regex stops at whitespace
+        assert_eq!(fields.get("session_id"), Some(&"\"abc".to_string()));
+    }
+
+    #[test]
+    fn parse_trace_fields_only_whitespace() {
+        let line = "   ";
+        let fields = parse_trace_fields(line);
+        assert!(fields.is_empty());
+    }
+
+    #[test]
+    fn parse_trace_fields_duplicate_keys_takes_last() {
+        let line = r#"session_id="first" session_id="last""#;
+        let fields = parse_trace_fields(line);
+        assert_eq!(fields.get("session_id"), Some(&"last".to_string()));
+    }
+
+    #[test]
+    fn trace_line_kind_with_embedded_quotes_in_value() {
+        // Quotes embedded in values are captured literally since regex doesn't handle escaped quotes
+        let line = r#"session_id="abc" path="file with "" quotes""#;
+        let fields = parse_trace_fields(line);
+        // The regex captures until whitespace or end, so embedded quotes become part of value
+        assert_eq!(fields.get("session_id"), Some(&"abc".to_string()));
+        // Path value includes the embedded quotes
+        assert!(fields.get("path").is_some());
+    }
 }
