@@ -5,11 +5,11 @@
 //! in CI without a display.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use serde::{Deserialize, Serialize};
-
 use super::WindowGeometry;
+use super::window_driver_trait::WindowDriver;
 
 /// A fake window ID for testing.
 pub const FAKE_WINDOW_ID: &str = "0xFAKE123";
@@ -80,6 +80,80 @@ impl FakeWindowDriver {
     /// Gets window state.
     pub fn get_state(&self, window_id: &str) -> Option<FakeWindowState> {
         self.state.lock().unwrap().get(window_id).cloned()
+    }
+}
+
+impl WindowDriver for FakeWindowDriver {
+    fn find_windows(&self, _title: &str) -> anyhow::Result<Vec<String>> {
+        Ok(self
+            .state
+            .lock()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect())
+    }
+
+    fn find_windows_for_pid(&self, _pid: i32) -> anyhow::Result<Vec<String>> {
+        Ok(self
+            .state
+            .lock()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect())
+    }
+
+    fn get_geometry(&self, window_id: &str) -> anyhow::Result<WindowGeometry> {
+        self.state
+            .lock()
+            .unwrap()
+            .get(window_id)
+            .map(|s| s.geometry.clone())
+            .ok_or_else(|| anyhow::anyhow!("window not found: {}", window_id))
+    }
+
+    fn window_exists(&self, window_id: &str) -> anyhow::Result<bool> {
+        Ok(self.state.lock().unwrap().contains_key(window_id))
+    }
+
+    fn activate(&self, window_id: &str) -> anyhow::Result<()> {
+        let mut state = self.state.lock().unwrap();
+        if let Some(win) = state.get_mut(window_id) {
+            win.active = true;
+        }
+        Ok(())
+    }
+
+    fn lower(&self, _window_id: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn resize(&self, window_id: &str, width: u32, height: u32) -> anyhow::Result<WindowGeometry> {
+        let mut state = self.state.lock().unwrap();
+        if let Some(win) = state.get_mut(window_id) {
+            win.geometry.width = width as i32;
+            win.geometry.height = height as i32;
+            Ok(win.geometry.clone())
+        } else {
+            Err(anyhow::anyhow!("window not found: {}", window_id))
+        }
+    }
+
+    fn screenshot(&self, _window_id: &str, _output_path: &PathBuf) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn press_key(&self, _window_id: &str, _key: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn get_active_window(&self) -> anyhow::Result<Option<String>> {
+        let state = self.state.lock().unwrap();
+        Ok(state
+            .iter()
+            .find(|(_, v)| v.active)
+            .map(|(k, _)| k.clone()))
     }
 }
 
