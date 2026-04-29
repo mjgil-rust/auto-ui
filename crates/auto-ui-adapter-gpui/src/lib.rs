@@ -661,14 +661,25 @@ fn resolve_example_binary(app_root: &Path, example: &str) -> Result<PathBuf> {
         .join("release")
         .join("examples")
         .join(example);
-    if path.exists() {
-        Ok(path)
-    } else {
+    if !path.exists() {
         bail!(
             "Missing gpui example binary {}. Build it first with the lightweight build path.",
             path.display()
-        )
+        );
     }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(metadata) = std::fs::metadata(&path) {
+            if metadata.permissions().mode() & 0o111 == 0 {
+                bail!(
+                    "gpui example binary {} is not executable. Check file permissions.",
+                    path.display()
+                );
+            }
+        }
+    }
+    Ok(path)
 }
 
 fn scroll_matrix_config_from_scenario(
@@ -1506,6 +1517,13 @@ mod tests {
         std::fs::create_dir_all(&example_dir).unwrap();
         let example_bin = example_dir.join("test_example");
         std::fs::write(&example_bin, "").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&example_bin).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&example_bin, perms).unwrap();
+        }
 
         let result = resolve_example_binary(&temp, "test_example");
         assert!(result.is_ok());
@@ -1520,5 +1538,26 @@ mod tests {
         let result = resolve_example_binary(&temp, "nonexistent_example");
         assert!(result.is_err());
         std::fs::remove_dir(temp).ok();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn resolve_example_binary_fails_when_not_executable() {
+        use std::os::unix::fs::PermissionsExt;
+        let temp = unique_temp_dir("example-binary-not-exec");
+        let example_dir = temp.join("target").join("release").join("examples");
+        std::fs::create_dir_all(&example_dir).unwrap();
+        let example_bin = example_dir.join("test_example");
+        std::fs::write(&example_bin, "").unwrap();
+        // Explicitly remove execute permission
+        let mut perms = std::fs::metadata(&example_bin).unwrap().permissions();
+        perms.set_mode(0o644);
+        std::fs::set_permissions(&example_bin, perms).unwrap();
+
+        let result = resolve_example_binary(&temp, "test_example");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not executable"));
+
+        std::fs::remove_dir_all(temp).ok();
     }
 }
