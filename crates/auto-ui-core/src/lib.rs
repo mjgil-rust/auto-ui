@@ -533,14 +533,30 @@ pub fn home_dir() -> Result<PathBuf> {
 }
 
 pub fn parse_widths(raw: &str) -> Result<Vec<u32>> {
-    raw.split(',')
+    let widths = raw
+        .split(',')
         .map(str::trim)
         .filter(|part| !part.is_empty())
         .map(|part| {
             part.parse::<u32>()
                 .with_context(|| format!("invalid width {part}"))
         })
-        .collect()
+        .collect::<Result<Vec<_>>>()?;
+    validate_widths(&widths)?;
+    Ok(widths)
+}
+
+/// Validate widths are within sensible bounds.
+pub fn validate_widths(widths: &[u32]) -> Result<()> {
+    for width in widths {
+        if *width == 0 {
+            bail!("width must be greater than zero");
+        }
+        if *width > 10000 {
+            bail!("width must be less than 10000 (got {})", width);
+        }
+    }
+    Ok(())
 }
 
 pub fn build_output_dir(output_dir: Option<&str>, prefix: &str) -> Result<PathBuf> {
@@ -720,6 +736,28 @@ provider = "codex"
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(err.contains("invalid width"));
+    }
+
+    #[test]
+    fn validate_widths_rejects_zero() {
+        let result = validate_widths(&[800, 0, 1280]);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("greater than zero"));
+    }
+
+    #[test]
+    fn validate_widths_rejects_overly_large() {
+        let result = validate_widths(&[800, 15000, 1280]);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("less than 10000"));
+    }
+
+    #[test]
+    fn validate_widths_accepts_valid() {
+        let result = validate_widths(&[800, 1024, 1280]);
+        assert!(result.is_ok());
     }
 
     #[test]
