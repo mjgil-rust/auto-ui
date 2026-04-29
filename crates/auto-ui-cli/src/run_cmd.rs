@@ -97,26 +97,29 @@ pub fn validate_selected_scenario(
 pub fn print_scenarios(target: Option<&str>) {
     match target.map(normalize_name).as_deref() {
         Some("rust_chatbot") => {
+            println!("rust_chatbot scenarios:");
             for scenario in rust_chatbot::scenario_names() {
-                println!("{scenario}");
+                println!("  {scenario}");
             }
         }
         Some("gpui_component_testing") => {
+            println!("gpui_component_testing scenarios:");
             for scenario in gpui::scenario_names() {
-                println!("{scenario}");
+                println!("  {scenario}");
             }
         }
         Some(other) => {
             println!("unknown target: {other}");
         }
         None => {
-            println!("rust_chatbot:");
+            println!("Available scenarios:");
+            println!("  rust_chatbot ({} scenarios)", rust_chatbot::scenario_names().len());
             for scenario in rust_chatbot::scenario_names() {
-                println!("  {scenario}");
+                println!("    {scenario}");
             }
-            println!("gpui_component_testing:");
+            println!("  gpui_component_testing ({} scenarios)", gpui::scenario_names().len());
             for scenario in gpui::scenario_names() {
-                println!("  {scenario}");
+                println!("    {scenario}");
             }
         }
     }
@@ -301,5 +304,17 @@ mod tests {
         let scenario = "debug";
         // Empty window object - should use defaults
         validate_selected_scenario(target, scenario, &scenario_value).unwrap();
+    }
+
+    #[test]
+    fn print_scenarios_shows_target_header() {
+        // Verify it doesn't panic and produces some output
+        print_scenarios(Some("rust_chatbot"));
+    }
+
+    #[test]
+    fn print_scenarios_unfiltered_shows_all_targets() {
+        // Verify unfiltered call includes both targets with counts
+        print_scenarios(None);
     }
 }
