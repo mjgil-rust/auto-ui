@@ -2820,6 +2820,41 @@ mod tests {
     }
 
     #[test]
+    fn load_sessions_selects_newest_by_updated_at() {
+        let temp = unique_temp_dir("sessions-newest-first");
+        let mut sessions = serde_json::Map::new();
+        // Add sessions with different updated_at timestamps
+        let timestamps = [
+            "2024-01-15T10:00:00Z", // oldest
+            "2024-01-17T12:00:00Z", // newest
+            "2024-01-16T08:00:00Z", // middle
+        ];
+        for (i, ts) in timestamps.iter().enumerate() {
+            let mut session = serde_json::Map::new();
+            session.insert("id".to_string(), serde_json::json!(format!("session{}", i)));
+            session.insert("name".to_string(), serde_json::json!(format!("Session {}", i)));
+            session.insert("updated_at".to_string(), serde_json::json!(ts));
+            session.insert("message_count".to_string(), serde_json::json!(10));
+            session.insert("hidden".to_string(), serde_json::json!(false));
+            sessions.insert(format!("session{}", i), serde_json::Value::Object(session));
+        }
+        let sessions_map = create_mock_sessions_map(
+            Provider::Claude,
+            &temp,
+            &serde_json::to_string(&serde_json::json!({ "sessions": sessions })).unwrap(),
+        );
+        // With max_sessions=2, should return session1 (newest) and session2 (middle), ordered newest first
+        let result = load_sessions_from_map(sessions_map, 2, true, None);
+        assert!(result.is_ok());
+        let sessions = result.unwrap();
+        assert_eq!(sessions.len(), 2);
+        // Should be ordered by updated_at descending (newest first)
+        assert_eq!(sessions[0].session_id, "session1"); // 2024-01-17T12:00:00Z
+        assert_eq!(sessions[1].session_id, "session2"); // 2024-01-16T08:00:00Z
+        std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[test]
     fn load_session_by_id_found() {
         let temp = unique_temp_dir("session-by-id-found");
         let sessions_json = serde_json::json!({
