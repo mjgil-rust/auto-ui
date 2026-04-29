@@ -85,8 +85,18 @@ Each `artifacts[]` entry has:
 
 - `kind`: stable artifact category such as `progress_log`, `summary_markdown`, or `window_screenshot`.
 - `path`: on-disk path written by the run. Always absolute and normalized by `normalize_artifact_path()`.
+- `source`: artifact origin, either `"generated"` (created by harness) or `"imported"` (from target app). Defaults to `"generated"` if omitted.
 - `description`: optional human-readable label.
 - `metadata`: optional object for scenario-specific qualifiers such as variant or width.
+
+### Source Field
+
+The `source` field distinguishes artifacts by origin:
+
+- **`generated`**: Artifacts created by the auto-ui harness (e.g., progress logs, harness-triggered screenshots).
+- **`imported`**: Artifacts imported from the target app (e.g., target's trace log, CSV output files).
+
+This distinction helps consumers understand artifact provenance and whether to expect the harness or the target app as the author.
 
 ## Path Semantics
 
@@ -95,5 +105,6 @@ Artifact paths in `artifacts[].path` are always absolute paths. Relative paths p
 ## Compatibility Rules
 
 - New top-level fields require a schema version bump.
+- The `source` field is optional and defaults to `"generated"` for backward compatibility with existing reports.
 - Adapter-specific expansion belongs under `details`, `measurements[]`, `events[]`, or artifact `metadata` unless it is clearly shared across targets.
 - Consumers should treat unknown nested keys as additive.
