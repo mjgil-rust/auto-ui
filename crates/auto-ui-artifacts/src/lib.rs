@@ -537,4 +537,130 @@ mod tests {
         assert_eq!(report.events[1].get("phase").and_then(Value::as_str), Some("launch"));
         assert_eq!(report.events[2].get("operation").and_then(Value::as_str), Some("discovery"));
     }
+
+    // Golden tests for scenario-specific report structures
+
+    #[test]
+    fn golden_rust_chatbot_debug_report_structure() {
+        let mut report = Report::new("rust_chatbot", "debug", "hybrid", Path::new("/test/app"));
+        report.add_artifact(
+            "progress_log",
+            "/tmp/out/progress.log",
+            Some("live progress log".to_string()),
+            Value::Null,
+        );
+        report.add_artifact(
+            "trace_log",
+            "/tmp/out/trace.log",
+            Some("rust-chatbot trace log".to_string()),
+            Value::Null,
+        );
+        report.push_lifecycle_event("prepare", "adapter prepared");
+        report.push_lifecycle_event("launch", "process launched");
+        report.set_details(json!({
+            "provider": "codex",
+            "instance": 1,
+            "widths": [520, 900, 1000],
+            "height": 900,
+        }));
+        report.finish_ok();
+
+        let json = serde_json::to_value(&report).unwrap();
+        assert_eq!(json.get("target").and_then(Value::as_str), Some("rust_chatbot"));
+        assert_eq!(json.get("scenario").and_then(Value::as_str), Some("debug"));
+        assert_eq!(json.get("mode").and_then(Value::as_str), Some("hybrid"));
+        assert_eq!(json.get("status").and_then(Value::as_str), Some("ok"));
+        assert!(json.get("artifacts").and_then(Value::as_array).is_some());
+        assert_eq!(json.get("artifacts").and_then(|a| a.as_array()).map(|arr| arr.len()), Some(2));
+        assert!(json.get("events").and_then(Value::as_array).is_some());
+        assert!(json.get("details").and_then(Value::as_object).is_some());
+    }
+
+    #[test]
+    fn golden_rust_chatbot_header_debug_report_structure() {
+        let mut report = Report::new("rust_chatbot", "header_debug", "hybrid", Path::new("/test/app"));
+        report.add_artifact("progress_log", "/tmp/out/progress.log", None, Value::Null);
+        report.add_artifact("trace_log", "/tmp/out/trace.log", None, Value::Null);
+        report.add_artifact("screenshot", "/tmp/out/screenshot.png", None, Value::Null);
+        report.push_lifecycle_event("prepare", "prepared");
+        report.set_details(json!({
+            "provider": "claude",
+            "widths": [520],
+            "header_height": 140,
+        }));
+        report.finish_ok();
+
+        let json = serde_json::to_value(&report).unwrap();
+        assert_eq!(json.get("scenario").and_then(Value::as_str), Some("header_debug"));
+        assert_eq!(json.get("artifacts").and_then(|a| a.as_array()).map(|arr| arr.len()), Some(3));
+    }
+
+    #[test]
+    fn golden_rust_chatbot_prompt_debug_report_structure() {
+        let mut report = Report::new("rust_chatbot", "prompt_debug", "hybrid", Path::new("/test/app"));
+        report.add_artifact("progress_log", "/tmp/out/progress.log", None, Value::Null);
+        report.push_measurement(json!({"name": "prompt_latency_ms", "value": 150}));
+        report.push_measurement(json!({"name": "upgrade_latency_ms", "value": 45}));
+        report.set_details(json!({
+            "provider": "codex",
+            "session_id": "test-session",
+            "prompt": "Hello",
+        }));
+        report.finish_ok();
+
+        let json = serde_json::to_value(&report).unwrap();
+        assert_eq!(json.get("scenario").and_then(Value::as_str), Some("prompt_debug"));
+        assert!(json.get("measurements").and_then(Value::as_array).is_some());
+        assert_eq!(json.get("measurements").and_then(|m| m.as_array()).map(|arr| arr.len()), Some(2));
+    }
+
+    #[test]
+    fn golden_gpui_scroll_matrix_report_structure() {
+        let mut report = Report::new("gpui_component_testing", "scroll_matrix", "startup_driven", Path::new("/test/gpui"));
+        report.add_artifact("progress_log", "/tmp/out/progress.log", None, Value::Null);
+        report.add_artifact("summary_csv", "/tmp/out/summary.csv", None, Value::Null);
+        report.push_measurement(json!({"name": "rows_processed", "value": 1000}));
+        report.set_details(json!({
+            "variants": ["large", "small"],
+            "run_ms": 5000,
+        }));
+        report.finish_ok();
+
+        let json = serde_json::to_value(&report).unwrap();
+        assert_eq!(json.get("target").and_then(Value::as_str), Some("gpui_component_testing"));
+        assert_eq!(json.get("scenario").and_then(Value::as_str), Some("scroll_matrix"));
+        assert_eq!(json.get("mode").and_then(Value::as_str), Some("startup_driven"));
+    }
+
+    #[test]
+    fn golden_gpui_scrollbar_trace_report_structure() {
+        let mut report = Report::new("gpui_component_testing", "scrollbar_trace", "startup_driven", Path::new("/test/gpui"));
+        report.add_artifact("progress_log", "/tmp/out/progress.log", None, Value::Null);
+        report.add_artifact("trace_csv", "/tmp/out/trace.csv", None, Value::Null);
+        report.set_details(json!({
+            "variants": ["default"],
+            "run_ms": 3000,
+        }));
+        report.finish_ok();
+
+        let json = serde_json::to_value(&report).unwrap();
+        assert_eq!(json.get("scenario").and_then(Value::as_str), Some("scrollbar_trace"));
+    }
+
+    #[test]
+    fn golden_gpui_conversation_paint_report_structure() {
+        let mut report = Report::new("gpui_component_testing", "conversation_paint", "startup_driven", Path::new("/test/gpui"));
+        report.add_artifact("progress_log", "/tmp/out/progress.log", None, Value::Null);
+        report.add_artifact("conversation_csv", "/tmp/out/conversation.csv", None, Value::Null);
+        report.push_measurement(json!({"name": "messages_processed", "value": 50}));
+        report.set_details(json!({
+            "threads": ["main", "worker"],
+            "run_ms": 10000,
+        }));
+        report.finish_ok();
+
+        let json = serde_json::to_value(&report).unwrap();
+        assert_eq!(json.get("scenario").and_then(Value::as_str), Some("conversation_paint"));
+        assert!(json.get("measurements").and_then(Value::as_array).is_some());
+    }
 }
