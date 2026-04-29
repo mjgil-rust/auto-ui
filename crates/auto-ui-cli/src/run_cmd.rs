@@ -11,12 +11,17 @@ const DEFAULT_GEOMETRY: &str = "1280x800x24";
 
 #[derive(Clone, Debug, ClapArgs)]
 pub struct Args {
+    /// Path to TOML scenario configuration file
     #[arg(long)]
     pub config: PathBuf,
+    /// Target to run (rust_chatbot or gpui_component_testing).
+    /// Overrides the target field in the TOML file.
     #[arg(long)]
     pub target: Option<String>,
+    /// Scenario to run within the target. Overrides the scenario field in the TOML file.
     #[arg(long)]
     pub scenario: Option<String>,
+    /// Output directory for artifacts and reports. Defaults to a unique timestamped directory.
     #[arg(long)]
     pub output_dir: Option<String>,
     /// Run on a private Xvfb display with openbox so no windows appear on the

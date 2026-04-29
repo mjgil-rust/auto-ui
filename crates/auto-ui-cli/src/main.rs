@@ -20,11 +20,17 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Run rust-chatbot debug session with window measurements
     Debug(debug_cmd::Args),
+    /// Run rust-chatbot header debug with screenshot and crop metrics
     HeaderDebug(header_debug_cmd::Args),
+    /// Run a generic scenario from a TOML config file
     Run(run_cmd::Args),
+    /// Print the JSON schema for report files
     ReportSchema,
+    /// List available automation targets (rust_chatbot, gpui_component_testing)
     Targets,
+    /// List scenarios for a target (use --target to filter)
     Scenarios {
         #[arg(long)]
         target: Option<String>,
