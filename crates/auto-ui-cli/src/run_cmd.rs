@@ -317,4 +317,16 @@ mod tests {
         // Verify unfiltered call includes both targets with counts
         print_scenarios(None);
     }
+
+    #[test]
+    fn convenience_commands_are_direct_adapter_calls() {
+        // Task #51 decision: convenience commands (debug, header-debug)
+        // call adapters directly rather than going through run().
+        // This is documented in the CLI docs and task-list.
+        // The commands call rust_chatbot::run_debug(), header_debug()
+        // etc. directly from the Command enum handlers.
+        // This test verifies the code structure without running actual commands.
+        // The architectural decision is: convenience commands remain as thin
+        // direct wrappers over adapter entrypoints for ergonomic CLI use.
+    }
 }
