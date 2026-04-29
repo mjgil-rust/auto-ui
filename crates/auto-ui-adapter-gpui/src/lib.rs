@@ -32,6 +32,13 @@ pub struct ScrollMatrixConfig {
     pub window_title_prefix: String,
     /// Optional process timeout in milliseconds. If not set, process runs without a harness-level timeout.
     pub timeout_ms: Option<u64>,
+    /// Optional custom command to run instead of resolving example binary.
+    /// When set, the `example` field is ignored and this command is used directly.
+    pub command: Option<String>,
+    /// Optional environment variables to set for the custom command.
+    pub command_env: Option<std::collections::HashMap<String, String>>,
+    /// Optional working directory for the custom command.
+    pub command_cwd: Option<String>,
 }
 
 impl Default for ScrollMatrixConfig {
@@ -54,6 +61,9 @@ impl Default for ScrollMatrixConfig {
             settle_ms: 800,
             window_title_prefix: "Auto UI GPUI Scroll Matrix".to_string(),
             timeout_ms: None,
+            command: None,
+            command_env: None,
+            command_cwd: None,
         }
     }
 }
@@ -72,6 +82,12 @@ pub struct ScrollbarTraceConfig {
     pub window_title: String,
     /// Optional process timeout in milliseconds.
     pub timeout_ms: Option<u64>,
+    /// Optional custom command to run instead of resolving example binary.
+    pub command: Option<String>,
+    /// Optional environment variables to set for the custom command.
+    pub command_env: Option<std::collections::HashMap<String, String>>,
+    /// Optional working directory for the custom command.
+    pub command_cwd: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -87,6 +103,12 @@ pub struct ConversationPaintConfig {
     pub window_title_prefix: String,
     /// Optional process timeout in milliseconds.
     pub timeout_ms: Option<u64>,
+    /// Optional custom command to run instead of resolving example binary.
+    pub command: Option<String>,
+    /// Optional environment variables to set for the custom command.
+    pub command_env: Option<std::collections::HashMap<String, String>>,
+    /// Optional working directory for the custom command.
+    pub command_cwd: Option<String>,
 }
 
 impl Default for ScrollbarTraceConfig {
@@ -103,6 +125,9 @@ impl Default for ScrollbarTraceConfig {
             settle_ms: 800,
             window_title: "Auto UI GPUI Scrollbar Trace".to_string(),
             timeout_ms: None,
+            command: None,
+            command_env: None,
+            command_cwd: None,
         }
     }
 }
@@ -120,6 +145,9 @@ impl Default for ConversationPaintConfig {
             settle_ms: 800,
             window_title_prefix: "Auto UI GPUI Conversation Paint".to_string(),
             timeout_ms: None,
+            command: None,
+            command_env: None,
+            command_cwd: None,
         }
     }
 }
@@ -181,7 +209,26 @@ pub fn run_scroll_matrix(config: ScrollMatrixConfig) -> Result<CompletedRun> {
     let app_root = resolve_app_root(config.app_root.as_deref())?;
     let output_dir = build_output_dir(config.output_dir.as_deref(), "auto-ui-gpui-scroll-matrix")?;
     let progress_path = output_dir.join("progress.log");
-    let binary = resolve_example_binary(&app_root, &config.example)?;
+
+    // Resolve binary and args: either from custom command or from example
+    let (binary, custom_args) = if let Some(ref cmd) = config.command {
+        let (path, args) = parse_command_string(cmd)?;
+        log_line(format!("command_binary={}", path.display()), Some(&progress_path))?;
+        if !args.is_empty() {
+            log_line(
+                format!("command_args={}", args.join(" ")),
+                Some(&progress_path),
+            )?;
+        }
+        (path, Some(args))
+    } else {
+        let binary = resolve_example_binary(&app_root, &config.example)?;
+        log_line(
+            format!("example_binary={}", binary.display()),
+            Some(&progress_path),
+        )?;
+        (binary, None)
+    };
 
     log_line(
         format!("app_root={}", app_root.display()),
@@ -189,10 +236,6 @@ pub fn run_scroll_matrix(config: ScrollMatrixConfig) -> Result<CompletedRun> {
     )?;
     log_line(
         format!("output_dir={}", output_dir.display()),
-        Some(&progress_path),
-    )?;
-    log_line(
-        format!("example_binary={}", binary.display()),
         Some(&progress_path),
     )?;
 
@@ -221,16 +264,35 @@ pub fn run_scroll_matrix(config: ScrollMatrixConfig) -> Result<CompletedRun> {
             )?;
 
             let mut command = Command::new(&binary);
-            command.current_dir(&app_root);
+            // Use custom cwd if specified, otherwise use app_root
+            if let Some(ref cwd) = config.command_cwd {
+                command.current_dir(cwd);
+            } else {
+                command.current_dir(&app_root);
+            }
+            // Add custom args if specified (replaces the default env var setup)
+            if let Some(ref args) = custom_args {
+                command.args(args);
+            }
             request_background_launch(&mut command);
-            command.env("BENCH_VARIANT", variant);
-            command.env("BENCH_OUTPUT", &csv_path);
-            command.env("BENCH_DURATION_MS", duration_ms.to_string());
-            command.env("BENCH_AUTO_SCROLL", "1");
-            command.env("BENCH_SCROLL_WARMUP_MS", config.warmup_ms.to_string());
-            command.env("BENCH_SCROLL_TICK_MS", config.scroll_delay_ms.to_string());
-            command.env("BENCH_SCROLL_STEP_PX", config.scroll_step_px.to_string());
-            command.env("BENCH_WINDOW_TITLE", &window_title);
+            // When using custom command, skip the BENCH_* env vars
+            // unless command_env explicitly includes them
+            if config.command.is_none() {
+                command.env("BENCH_VARIANT", variant);
+                command.env("BENCH_OUTPUT", &csv_path);
+                command.env("BENCH_DURATION_MS", duration_ms.to_string());
+                command.env("BENCH_AUTO_SCROLL", "1");
+                command.env("BENCH_SCROLL_WARMUP_MS", config.warmup_ms.to_string());
+                command.env("BENCH_SCROLL_TICK_MS", config.scroll_delay_ms.to_string());
+                command.env("BENCH_SCROLL_STEP_PX", config.scroll_step_px.to_string());
+                command.env("BENCH_WINDOW_TITLE", &window_title);
+            }
+            // Add custom env vars if specified
+            if let Some(ref env) = config.command_env {
+                for (key, value) in env {
+                    command.env(key, value);
+                }
+            }
 
             run_process_with_optional_capture(
                 command,
@@ -344,7 +406,26 @@ pub fn run_scrollbar_trace(config: ScrollbarTraceConfig) -> Result<CompletedRun>
     let output_dir =
         build_output_dir(config.output_dir.as_deref(), "auto-ui-gpui-scrollbar-trace")?;
     let progress_path = output_dir.join("progress.log");
-    let binary = resolve_example_binary(&app_root, &config.example)?;
+
+    // Resolve binary and args: either from custom command or from example
+    let (binary, custom_args) = if let Some(ref cmd) = config.command {
+        let (path, args) = parse_command_string(cmd)?;
+        log_line(format!("command_binary={}", path.display()), Some(&progress_path))?;
+        if !args.is_empty() {
+            log_line(
+                format!("command_args={}", args.join(" ")),
+                Some(&progress_path),
+            )?;
+        }
+        (path, Some(args))
+    } else {
+        let binary = resolve_example_binary(&app_root, &config.example)?;
+        log_line(
+            format!("example_binary={}", binary.display()),
+            Some(&progress_path),
+        )?;
+        (binary, None)
+    };
 
     log_line(
         format!("app_root={}", app_root.display()),
@@ -352,10 +433,6 @@ pub fn run_scrollbar_trace(config: ScrollbarTraceConfig) -> Result<CompletedRun>
     )?;
     log_line(
         format!("output_dir={}", output_dir.display()),
-        Some(&progress_path),
-    )?;
-    log_line(
-        format!("example_binary={}", binary.display()),
         Some(&progress_path),
     )?;
 
@@ -376,24 +453,43 @@ pub fn run_scrollbar_trace(config: ScrollbarTraceConfig) -> Result<CompletedRun>
     let output_dir_for_report = output_dir.clone();
     let result = (|| -> Result<CompletedRun> {
         let mut command = Command::new(&binary);
-        command.current_dir(&app_root);
+        // Use custom cwd if specified, otherwise use app_root
+        if let Some(ref cwd) = config.command_cwd {
+            command.current_dir(cwd);
+        } else {
+            command.current_dir(&app_root);
+        }
+        // Add custom args if specified
+        if let Some(ref args) = custom_args {
+            command.args(args);
+        }
         request_background_launch(&mut command);
-        command.env("GPUI_COMPONENT_SCROLLBAR_TRACE", "1");
-        command.env("SCROLLBAR_DEMO_AUTO_SCROLL", "1");
-        command.env("SCROLLBAR_DEMO_DURATION_MS", duration_ms.to_string());
-        command.env(
-            "SCROLLBAR_DEMO_SCROLL_WARMUP_MS",
-            config.warmup_ms.to_string(),
-        );
-        command.env(
-            "SCROLLBAR_DEMO_SCROLL_TICK_MS",
-            config.scroll_delay_ms.to_string(),
-        );
-        command.env(
-            "SCROLLBAR_DEMO_SCROLL_STEP_PX",
-            config.scroll_step_px.to_string(),
-        );
-        command.env("SCROLLBAR_DEMO_WINDOW_TITLE", &config.window_title);
+        // When using custom command, skip the SCROLLBAR_* env vars
+        // unless command_env explicitly includes them
+        if config.command.is_none() {
+            command.env("GPUI_COMPONENT_SCROLLBAR_TRACE", "1");
+            command.env("SCROLLBAR_DEMO_AUTO_SCROLL", "1");
+            command.env("SCROLLBAR_DEMO_DURATION_MS", duration_ms.to_string());
+            command.env(
+                "SCROLLBAR_DEMO_SCROLL_WARMUP_MS",
+                config.warmup_ms.to_string(),
+            );
+            command.env(
+                "SCROLLBAR_DEMO_SCROLL_TICK_MS",
+                config.scroll_delay_ms.to_string(),
+            );
+            command.env(
+                "SCROLLBAR_DEMO_SCROLL_STEP_PX",
+                config.scroll_step_px.to_string(),
+            );
+            command.env("SCROLLBAR_DEMO_WINDOW_TITLE", &config.window_title);
+        }
+        // Add custom env vars if specified
+        if let Some(ref env) = config.command_env {
+            for (key, value) in env {
+                command.env(key, value);
+            }
+        }
 
         run_process_with_optional_capture(
             command,
@@ -485,7 +581,26 @@ pub fn run_conversation_paint(config: ConversationPaintConfig) -> Result<Complet
         "auto-ui-gpui-conversation-paint",
     )?;
     let progress_path = output_dir.join("progress.log");
-    let binary = resolve_example_binary(&app_root, &config.example)?;
+
+    // Resolve binary and args: either from custom command or from example
+    let (binary, custom_args) = if let Some(ref cmd) = config.command {
+        let (path, args) = parse_command_string(cmd)?;
+        log_line(format!("command_binary={}", path.display()), Some(&progress_path))?;
+        if !args.is_empty() {
+            log_line(
+                format!("command_args={}", args.join(" ")),
+                Some(&progress_path),
+            )?;
+        }
+        (path, Some(args))
+    } else {
+        let binary = resolve_example_binary(&app_root, &config.example)?;
+        log_line(
+            format!("example_binary={}", binary.display()),
+            Some(&progress_path),
+        )?;
+        (binary, None)
+    };
 
     log_line(
         format!("app_root={}", app_root.display()),
@@ -493,10 +608,6 @@ pub fn run_conversation_paint(config: ConversationPaintConfig) -> Result<Complet
     )?;
     log_line(
         format!("output_dir={}", output_dir.display()),
-        Some(&progress_path),
-    )?;
-    log_line(
-        format!("example_binary={}", binary.display()),
         Some(&progress_path),
     )?;
 
@@ -525,16 +636,35 @@ pub fn run_conversation_paint(config: ConversationPaintConfig) -> Result<Complet
             )?;
 
             let mut command = Command::new(&binary);
-            command.current_dir(&app_root);
+            // Use custom cwd if specified, otherwise use app_root
+            if let Some(ref cwd) = config.command_cwd {
+                command.current_dir(cwd);
+            } else {
+                command.current_dir(&app_root);
+            }
+            // Add custom args if specified
+            if let Some(ref args) = custom_args {
+                command.args(args);
+            }
             request_background_launch(&mut command);
-            command.env("BENCH_OUTPUT", &csv_path);
-            command.env("BENCH_DURATION_MS", config.run_ms.to_string());
-            command.env("BENCH_THREAD", thread_id.to_string());
-            command.env(
-                "BENCH_DEFER_FIRST_FRAME",
-                if config.defer_first_frame { "1" } else { "0" },
-            );
-            command.env("BENCH_WINDOW_TITLE", &window_title);
+            // When using custom command, skip the BENCH_* env vars
+            // unless command_env explicitly includes them
+            if config.command.is_none() {
+                command.env("BENCH_OUTPUT", &csv_path);
+                command.env("BENCH_DURATION_MS", config.run_ms.to_string());
+                command.env("BENCH_THREAD", thread_id.to_string());
+                command.env(
+                    "BENCH_DEFER_FIRST_FRAME",
+                    if config.defer_first_frame { "1" } else { "0" },
+                );
+                command.env("BENCH_WINDOW_TITLE", &window_title);
+            }
+            // Add custom env vars if specified
+            if let Some(ref env) = config.command_env {
+                for (key, value) in env {
+                    command.env(key, value);
+                }
+            }
 
             run_process_with_optional_capture(
                 command,
@@ -692,6 +822,34 @@ fn resolve_example_binary(app_root: &Path, example: &str) -> Result<PathBuf> {
         }
     }
     Ok(path)
+}
+
+/// Parse a command string into path and args.
+/// Supports simple shell-like parsing: "path/to/binary --arg1 --arg2"
+/// Returns (path, args) tuple.
+fn parse_command_string(command: &str) -> Result<(PathBuf, Vec<String>)> {
+    let parts: Vec<&str> = command.split_whitespace().collect();
+    if parts.is_empty() {
+        bail!("Empty command string");
+    }
+    let path = PathBuf::from(parts[0]);
+    if !path.exists() {
+        bail!("Custom command binary {} does not exist", path.display());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(metadata) = std::fs::metadata(&path) {
+            if metadata.permissions().mode() & 0o111 == 0 {
+                bail!(
+                    "Custom command binary {} is not executable. Check file permissions.",
+                    path.display()
+                );
+            }
+        }
+    }
+    let args: Vec<String> = parts[1..].iter().map(|s| s.to_string()).collect();
+    Ok((path, args))
 }
 
 fn scroll_matrix_config_from_scenario(
@@ -1567,6 +1725,9 @@ mod tests {
             settle_ms: 300,
             window_title_prefix: "Auto UI GPUI Smoke".to_string(),
             timeout_ms: None,
+            command: None,
+            command_env: None,
+            command_cwd: None,
         })
         .unwrap();
         assert!(completed.report_path.exists());
@@ -1590,6 +1751,9 @@ mod tests {
             settle_ms: 300,
             window_title: "Auto UI GPUI Scrollbar Smoke".to_string(),
             timeout_ms: None,
+            command: None,
+            command_env: None,
+            command_cwd: None,
         })
         .unwrap();
         assert!(completed.report_path.exists());
@@ -1612,6 +1776,9 @@ mod tests {
             settle_ms: 300,
             window_title_prefix: "Auto UI GPUI Conversation Smoke".to_string(),
             timeout_ms: None,
+            command: None,
+            command_env: None,
+            command_cwd: None,
         })
         .unwrap();
         assert!(completed.report_path.exists());
@@ -1864,6 +2031,9 @@ exit 0
             settle_ms: 100,
             window_title_prefix: "Test".to_string(),
             timeout_ms: Some(5000),
+            command: None,
+            command_env: None,
+            command_cwd: None,
         };
 
         let completed = run_scroll_matrix(config).expect("run_scroll_matrix should succeed");
@@ -1927,6 +2097,9 @@ exit 0
             settle_ms: 100,
             window_title: "Test Scrollbar".to_string(),
             timeout_ms: Some(5000),
+            command: None,
+            command_env: None,
+            command_cwd: None,
         };
 
         let completed =
@@ -1992,6 +2165,9 @@ exit 0
             settle_ms: 100,
             window_title_prefix: "Test".to_string(),
             timeout_ms: Some(5000),
+            command: None,
+            command_env: None,
+            command_cwd: None,
         };
 
         let completed =
@@ -2032,6 +2208,84 @@ exit 0
             "should have summary_markdown artifact"
         );
 
+        std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[test]
+    fn parse_command_string_extracts_path_and_args() {
+        // Create a real executable to test parsing
+        use std::os::unix::fs::PermissionsExt;
+        let temp = unique_temp_dir("parse-cmd-test");
+        let bin_path = temp.join("test_binary");
+        std::fs::write(&bin_path, "#!/bin/sh").unwrap();
+        std::fs::set_permissions(&bin_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let (path, args) = parse_command_string(&format!("{} --arg1 --arg2", bin_path.to_string_lossy())).unwrap();
+        assert_eq!(path, bin_path);
+        assert_eq!(args, vec!["--arg1", "--arg2"]);
+        std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[test]
+    fn parse_command_string_path_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let temp = unique_temp_dir("parse-cmd-path-test");
+        let bin_path = temp.join("test_binary");
+        std::fs::write(&bin_path, "#!/bin/sh").unwrap();
+        std::fs::set_permissions(&bin_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let (path, args) = parse_command_string(&bin_path.to_string_lossy()).unwrap();
+        assert_eq!(path, bin_path);
+        assert!(args.is_empty());
+        std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[test]
+    fn parse_command_string_empty_command_fails() {
+        let result = parse_command_string("");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Empty command"));
+    }
+
+    #[test]
+    fn parse_command_string_nonexistent_binary_fails() {
+        let result = parse_command_string("/nonexistent/path/to/binary");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("does not exist"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn parse_command_string_non_executable_fails() {
+        use std::os::unix::fs::PermissionsExt;
+        let temp = unique_temp_dir("non-exec-test");
+        let bin_path = temp.join("non_exec_binary");
+        std::fs::write(&bin_path, "not executable").unwrap();
+        // Ensure file is NOT executable
+        let mut perms = std::fs::metadata(&bin_path).unwrap().permissions();
+        perms.set_mode(0o644);
+        std::fs::set_permissions(&bin_path, perms).unwrap();
+
+        let result = parse_command_string(&bin_path.to_string_lossy());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not executable"));
+        std::fs::remove_dir_all(temp).ok();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn parse_command_string_executable_succeeds() {
+        use std::os::unix::fs::PermissionsExt;
+        let temp = unique_temp_dir("exec-test");
+        let bin_path = temp.join("exec_binary");
+        std::fs::write(&bin_path, "#!/bin/sh\necho hello").unwrap();
+        let mut perms = std::fs::metadata(&bin_path).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&bin_path, perms).unwrap();
+
+        let (path, args) = parse_command_string(&bin_path.to_string_lossy()).unwrap();
+        assert_eq!(path, bin_path);
+        assert!(args.is_empty());
         std::fs::remove_dir_all(temp).ok();
     }
 }
