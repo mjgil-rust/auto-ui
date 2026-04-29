@@ -476,6 +476,113 @@ mod tests {
     }
 
     #[test]
+    fn complete_report_conforms_to_schema() {
+        // Build a complete, well-formed report and verify it passes schema checks
+        let mut report = Report::new("rust_chatbot", "debug", "hybrid", Path::new("/test/app"));
+        report.add_artifact(
+            "progress_log",
+            "/tmp/out/progress.log",
+            Some("live progress log".to_string()),
+            Value::Null,
+        );
+        report.add_artifact(
+            "trace_log",
+            "/tmp/out/trace.log",
+            Some("rust-chatbot trace log".to_string()),
+            Value::Null,
+        );
+        report.push_lifecycle_event("prepare", "adapter prepared");
+        report.push_lifecycle_event("launch", "process launched");
+        report.push_measurement(json!({"name": "session_count", "value": 3}));
+        report.set_details(json!({
+            "provider": "codex",
+            "widths": [520, 900],
+            "height": 900,
+        }));
+        report.finish_ok();
+
+        let json = serde_json::to_value(&report).unwrap();
+
+        // Validate required fields
+        let required_fields = [
+            "schema_version", "tool_version", "target", "scenario",
+            "mode", "app_root", "run_id", "started_at", "status",
+            "artifacts", "measurements", "events", "details",
+        ];
+        for field in required_fields {
+            assert!(json.get(field).is_some(), "required field '{}' must be present", field);
+        }
+
+        // Validate status is one of the allowed values
+        let status = json.get("status").and_then(Value::as_str).unwrap();
+        assert!(
+            status == "running" || status == "ok" || status == "error",
+            "status must be one of 'running', 'ok', 'error', got '{}'",
+            status
+        );
+
+        // Validate artifacts is an array with properly structured items
+        let artifacts = json.get("artifacts").unwrap().as_array().unwrap();
+        assert!(!artifacts.is_empty(), "artifacts should not be empty for this test");
+        for art in artifacts {
+            assert!(art.get("kind").is_some(), "artifact must have 'kind'");
+            assert!(art.get("path").is_some(), "artifact must have 'path'");
+        }
+
+        // Validate events is an array
+        let events = json.get("events").unwrap().as_array().unwrap();
+        assert!(!events.is_empty(), "events should not be empty for this test");
+        for evt in events {
+            assert!(evt.get("kind").is_some(), "event must have 'kind'");
+            assert!(evt.get("timestamp").is_some(), "event must have 'timestamp'");
+        }
+
+        // Validate measurements is an array
+        let measurements = json.get("measurements").unwrap().as_array().unwrap();
+        for m in measurements {
+            assert!(m.get("name").is_some() || m.get("value").is_some(),
+                "measurement should have 'name' and/or 'value'");
+        }
+
+        // Validate details is present and non-null
+        assert!(
+            !json.get("details").unwrap().is_null(),
+            "details must not be null"
+        );
+
+        // Validate finished_at is present after finish_ok
+        assert!(json.get("finished_at").is_some(), "finished_at must be present after finish");
+    }
+
+    #[test]
+    fn error_report_conforms_to_schema() {
+        let mut report = Report::new("rust_chatbot", "debug", "hybrid", Path::new("/test/app"));
+        report.finish_error("trace timeout after 30s");
+
+        let json = serde_json::to_value(&report).unwrap();
+
+        // Status should be 'error'
+        assert_eq!(json.get("status").and_then(Value::as_str), Some("error"));
+        // status_message should be present for error reports
+        assert!(json.get("status_message").is_some(), "error reports should have status_message");
+        assert!(!json.get("status_message").unwrap().is_null(), "status_message should not be null for error");
+        // finished_at should be present
+        assert!(json.get("finished_at").is_some(), "finished_at must be present for completed report");
+    }
+
+    #[test]
+    fn running_report_conforms_to_schema() {
+        let report = Report::new("rust_chatbot", "debug", "hybrid", Path::new("/test/app"));
+
+        let json = serde_json::to_value(&report).unwrap();
+
+        // Status should be 'running' for unfinished reports
+        assert_eq!(json.get("status").and_then(Value::as_str), Some("running"));
+        // finished_at is skipped when None, so it should not be present
+        assert!(json.get("finished_at").is_none(), "running reports should skip finished_at");
+    }
+
+    #[test]
     fn push_lifecycle_event_adds_event_with_phase_and_message() {
         let mut report = Report::new(
             "test_target",
