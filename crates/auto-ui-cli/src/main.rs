@@ -1,4 +1,5 @@
 pub mod debug_cmd;
+pub mod error_fmt;
 pub mod header_debug_cmd;
 pub mod logging;
 pub mod report_schema_cmd;
@@ -33,7 +34,9 @@ enum Command {
 fn main() {
     logging::init();
     if let Err(err) = run() {
-        eprintln!("{err:#}");
+        let safe_error = error_fmt::format_safe_error(&err.to_string());
+        eprintln!("error: {}\n", safe_error);
+        eprintln!("For troubleshooting, check the progress log and report.json in the output directory.");
         std::process::exit(1);
     }
 }
