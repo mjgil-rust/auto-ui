@@ -18,6 +18,49 @@ pub struct ArtifactRef {
     pub metadata: Value,
 }
 
+/// Stable artifact kinds recognized by the harness.
+/// Adapters should use these canonical names when registering artifacts.
+pub mod artifact_kind {
+    /// Progress log written during scenario execution
+    pub const PROGRESS_LOG: &str = "progress_log";
+    /// Trace log from rust-chatbot debug session
+    pub const TRACE_LOG: &str = "trace_log";
+    /// Window screenshot captured during header debug
+    pub const WINDOW_SCREENSHOT: &str = "window_screenshot";
+    /// Summary CSV from GPUI scroll_matrix
+    pub const SUMMARY_CSV: &str = "summary_csv";
+    /// Trace CSV from GPUI scrollbar_trace
+    pub const TRACE_CSV: &str = "trace_csv";
+    /// Conversation CSV from GPUI conversation_paint
+    pub const CONVERSATION_CSV: &str = "conversation_csv";
+    /// Summary markdown document
+    pub const SUMMARY_MARKDOWN: &str = "summary_markdown";
+    /// All stable artifact kinds
+    pub const ALL: &[&str] = &[
+        PROGRESS_LOG,
+        TRACE_LOG,
+        WINDOW_SCREENSHOT,
+        SUMMARY_CSV,
+        TRACE_CSV,
+        CONVERSATION_CSV,
+        SUMMARY_MARKDOWN,
+    ];
+}
+
+/// Validate that an artifact kind is in the stable catalog.
+/// Returns Ok(()) if valid, or Err with suggestion to use a stable kind.
+pub fn validate_artifact_kind(kind: &str) -> Result<()> {
+    if artifact_kind::ALL.contains(&kind) {
+        Ok(())
+    } else {
+        anyhow::bail!(
+            "unknown artifact kind '{}'. Stable kinds: {}",
+            kind,
+            artifact_kind::ALL.join(", ")
+        )
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Report {
     pub schema_version: String,
@@ -82,6 +125,24 @@ impl Report {
 
     pub fn push_measurement(&mut self, value: Value) {
         self.measurements.push(value);
+    }
+
+    /// Adds a measurement row with required `name` and `value` fields.
+    /// Measurements without these fields will fail validation.
+    pub fn push_measurement_with_name_value(&mut self, name: &str, value: i64) {
+        self.measurements.push(json!({
+            "name": name,
+            "value": value,
+        }));
+    }
+
+    /// Adds a measurement with a name, value, and unit.
+    pub fn push_timed_measurement(&mut self, name: &str, value: i64, unit: &str) {
+        self.measurements.push(json!({
+            "name": name,
+            "value": value,
+            "unit": unit,
+        }));
     }
 
     pub fn push_event(&mut self, value: Value) {
@@ -604,6 +665,112 @@ mod tests {
         assert_eq!(json.get("status").and_then(Value::as_str), Some("running"));
         // finished_at is skipped when None, so it should not be present
         assert!(json.get("finished_at").is_none(), "running reports should skip finished_at");
+    }
+
+    // Measurement schema conventions tests
+
+    #[test]
+    fn push_measurement_with_name_value_creates_required_fields() {
+        let mut report = Report::new("test_target", "test_scenario", "startup_driven", Path::new("/tmp"));
+        report.push_measurement_with_name_value("session_count", 5);
+
+        assert_eq!(report.measurements.len(), 1);
+        let m = &report.measurements[0];
+        assert_eq!(m.get("name").and_then(Value::as_str), Some("session_count"));
+        assert_eq!(m.get("value").and_then(Value::as_i64), Some(5));
+    }
+
+    #[test]
+    fn push_timed_measurement_includes_unit() {
+        let mut report = Report::new("test_target", "test_scenario", "startup_driven", Path::new("/tmp"));
+        report.push_timed_measurement("render_time", 150, "ms");
+
+        assert_eq!(report.measurements.len(), 1);
+        let m = &report.measurements[0];
+        assert_eq!(m.get("name").and_then(Value::as_str), Some("render_time"));
+        assert_eq!(m.get("value").and_then(Value::as_i64), Some(150));
+        assert_eq!(m.get("unit").and_then(Value::as_str), Some("ms"));
+    }
+
+    #[test]
+    fn measurement_rows_support_timing_conventions() {
+        let mut report = Report::new("test_target", "test_scenario", "startup_driven", Path::new("/tmp"));
+        // Standard timing measurement
+        report.push_measurement_with_name_value("prompt_latency_ms", 150);
+        report.push_timed_measurement("render_time", 45, "ms");
+
+        let json = serde_json::to_value(&report).unwrap();
+        let measurements = json.get("measurements").unwrap().as_array().unwrap();
+
+        // First measurement should have name and value
+        assert!(measurements[0].get("name").is_some());
+        assert!(measurements[0].get("value").is_some());
+
+        // Second should also have unit
+        assert_eq!(measurements[1].get("unit").and_then(Value::as_str), Some("ms"));
+    }
+
+    #[test]
+    fn measurement_rows_support_count_conventions() {
+        let mut report = Report::new("test_target", "test_scenario", "startup_driven", Path::new("/tmp"));
+        report.push_measurement_with_name_value("rows_processed", 1000);
+        report.push_measurement_with_name_value("messages_sent", 42);
+
+        let json = serde_json::to_value(&report).unwrap();
+        let measurements = json.get("measurements").unwrap().as_array().unwrap();
+
+        assert_eq!(measurements.len(), 2);
+        assert_eq!(measurements[0].get("name").and_then(Value::as_str), Some("rows_processed"));
+        assert_eq!(measurements[0].get("value").and_then(Value::as_i64), Some(1000));
+        assert_eq!(measurements[1].get("name").and_then(Value::as_str), Some("messages_sent"));
+        assert_eq!(measurements[1].get("value").and_then(Value::as_i64), Some(42));
+    }
+
+    // Artifact kind catalog tests
+
+    #[test]
+    fn artifact_kind_constants_are_defined() {
+        assert_eq!(artifact_kind::PROGRESS_LOG, "progress_log");
+        assert_eq!(artifact_kind::TRACE_LOG, "trace_log");
+        assert_eq!(artifact_kind::WINDOW_SCREENSHOT, "window_screenshot");
+        assert_eq!(artifact_kind::SUMMARY_CSV, "summary_csv");
+        assert_eq!(artifact_kind::TRACE_CSV, "trace_csv");
+        assert_eq!(artifact_kind::CONVERSATION_CSV, "conversation_csv");
+        assert_eq!(artifact_kind::SUMMARY_MARKDOWN, "summary_markdown");
+    }
+
+    #[test]
+    fn validate_artifact_kind_accepts_stable_kinds() {
+        for kind in artifact_kind::ALL {
+            assert!(validate_artifact_kind(kind).is_ok(), "should accept '{}'", kind);
+        }
+    }
+
+    #[test]
+    fn validate_artifact_kind_rejects_unknown_kinds() {
+        let result = validate_artifact_kind("unknown_custom_kind");
+        assert!(result.is_err(), "should reject unknown artifact kind");
+
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("unknown_custom_kind"));
+        assert!(err_msg.contains("progress_log")); // Should list stable kinds
+    }
+
+    #[test]
+    fn artifact_kind_catalog_exhaustive() {
+        // Verify all expected stable kinds are in ALL
+        let expected_kinds = [
+            "progress_log", "trace_log", "window_screenshot", "summary_csv",
+            "trace_csv", "conversation_csv", "summary_markdown",
+        ];
+        assert_eq!(artifact_kind::ALL.len(), expected_kinds.len());
+        for kind in expected_kinds {
+            assert!(
+                artifact_kind::ALL.contains(&kind),
+                "'{}' should be in artifact_kind::ALL",
+                kind
+            );
+        }
     }
 
     #[test]
