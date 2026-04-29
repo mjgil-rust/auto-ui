@@ -16,7 +16,15 @@ impl HeadlessDisplay {
         let display = find_free_display()?;
 
         let xvfb = Command::new("Xvfb")
-            .args([&display, "-screen", "0", geometry, "-ac", "-nolisten", "tcp"])
+            .args([
+                &display,
+                "-screen",
+                "0",
+                geometry,
+                "-ac",
+                "-nolisten",
+                "tcp",
+            ])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
@@ -97,7 +105,10 @@ mod tests {
         let display = find_free_display().expect("should find a free display");
         assert!(display.starts_with(':'), "display must start with ':'");
         let num: u32 = display[1..].parse().expect("display must be :N");
-        assert!((80..=99).contains(&num), "display number must be in 80..=99");
+        assert!(
+            (80..=99).contains(&num),
+            "display number must be in 80..=99"
+        );
     }
 
     #[test]

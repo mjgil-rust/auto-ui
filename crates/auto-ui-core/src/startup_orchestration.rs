@@ -117,7 +117,11 @@ impl StartupOrchestrator {
 
         // Log the launch
         log_line(
-            format!("launching: {} {:?}", command_spec.program.display(), command_spec.args),
+            format!(
+                "launching: {} {:?}",
+                command_spec.program.display(),
+                command_spec.args
+            ),
             progress_path.as_deref(),
         )?;
 
@@ -131,7 +135,10 @@ impl StartupOrchestrator {
 
         let pid = child.id();
 
-        log_line(format!("process spawned with PID: {}", pid), progress_path.as_deref())?;
+        log_line(
+            format!("process spawned with PID: {}", pid),
+            progress_path.as_deref(),
+        )?;
 
         // Wait for completion with timeout
         let deadline = start + self.config.timeout;
@@ -161,7 +168,10 @@ impl StartupOrchestrator {
 
         let elapsed = start.elapsed();
         log_line(
-            format!("process exited after {:?} with status: {}", elapsed, exit_status),
+            format!(
+                "process exited after {:?} with status: {}",
+                elapsed, exit_status
+            ),
             progress_path.as_deref(),
         )?;
 
@@ -251,7 +261,10 @@ mod tests {
 
         assert_eq!(config.timeout, Duration::from_secs(60));
         assert_eq!(config.working_dir, Some(PathBuf::from("/tmp")));
-        assert_eq!(config.progress_log, Some(PathBuf::from("/tmp/progress.log")));
+        assert_eq!(
+            config.progress_log,
+            Some(PathBuf::from("/tmp/progress.log"))
+        );
     }
 
     #[test]
@@ -305,8 +318,7 @@ mod tests {
     fn startup_orchestrator_respects_timeout() {
         let spec = CommandSpec::new("/bin/sleep").arg("10");
 
-        let config = StartupOrchestrationConfig::default()
-            .with_timeout(Duration::from_millis(100));
+        let config = StartupOrchestrationConfig::default().with_timeout(Duration::from_millis(100));
         let orchestrator = StartupOrchestrator::new(config);
         let result = orchestrator.launch_and_wait_with_command(&spec);
 

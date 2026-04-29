@@ -1,13 +1,13 @@
 mod adapter_lifecycle;
-mod display;
 mod adapter_registry;
+mod display;
 pub mod errors;
+mod hybrid_orchestration;
+mod interactive_window_orchestration;
 pub mod retry;
 pub mod safe_log;
-pub mod trace_parse;
 mod startup_orchestration;
-mod interactive_window_orchestration;
-mod hybrid_orchestration;
+pub mod trace_parse;
 
 use std::collections::BTreeMap;
 use std::env;
@@ -26,27 +26,30 @@ pub use display::HeadlessDisplay;
 pub type TraceFields = BTreeMap<String, String>;
 pub const AUTO_UI_LAUNCH_BACKGROUND_ENV: &str = "AUTO_UI_LAUNCH_BACKGROUND";
 
-pub use adapter_registry::{AdapterRegistry, RegisteredAdapter};
 pub use adapter_lifecycle::{
     run_lifecycle, run_lifecycle_collect, LifecycleError, LifecycleReporter, LifecycleResult,
 };
+pub use adapter_registry::{AdapterRegistry, RegisteredAdapter};
 pub use errors::{
     ArtifactMissingError, BinaryNotFoundError, DisplayError, PathExpansionError,
     ProcessExitedError, ReportSerializationError, ScenarioValidationError, TargetRootError,
     TraceTimeoutError, WindowNotFoundError, WindowOperationError,
 };
-pub use retry::{retry_with_backoff, RetryConfig, RetryError, trace_wait_config, window_discovery_config};
-pub use safe_log::{
-    redact_command_args, redact_env_var, redact_env_vars, sanitize_cwd_for_log, sanitize_path_for_log,
-};
-pub use trace_parse::{
-    extract_session_id, parse_trace_fields, trace_line_kind, TraceLineKind,
-};
-pub use startup_orchestration::{run_startup_scenario, StartupOrchestrationConfig, StartupOrchestrator};
+pub use hybrid_orchestration::{HybridOrchestrationConfig, HybridOrchestrator};
 pub use interactive_window_orchestration::{
     InteractiveOrchestrationConfig, InteractiveWindowOrchestrator, WindowGeometry, WindowState,
 };
-pub use hybrid_orchestration::{HybridOrchestrationConfig, HybridOrchestrator};
+pub use retry::{
+    retry_with_backoff, trace_wait_config, window_discovery_config, RetryConfig, RetryError,
+};
+pub use safe_log::{
+    redact_command_args, redact_env_var, redact_env_vars, sanitize_cwd_for_log,
+    sanitize_path_for_log,
+};
+pub use startup_orchestration::{
+    run_startup_scenario, StartupOrchestrationConfig, StartupOrchestrator,
+};
+pub use trace_parse::{extract_session_id, parse_trace_fields, trace_line_kind, TraceLineKind};
 
 pub struct CommandOutput {
     pub stdout: String,
@@ -275,9 +278,7 @@ impl CommandSpec {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum LaunchStrategy {
     /// Attach to an existing window without launching a new process.
-    ExistingWindow {
-        selector: WindowSelector,
-    },
+    ExistingWindow { selector: WindowSelector },
     /// Launch and manage the process lifecycle (window management, cleanup).
     ManagedProcess {
         command: CommandSpec,
@@ -434,9 +435,7 @@ pub trait TargetAdapter: Send + Sync {
 
     /// Validates that a scenario name is valid for this adapter.
     fn supports_scenario(&self, scenario: &str) -> bool {
-        self.discover_scenarios()
-            .iter()
-            .any(|s| s.name == scenario)
+        self.discover_scenarios().iter().any(|s| s.name == scenario)
     }
 
     /// Prepares a run for the given scenario.
@@ -555,9 +554,11 @@ pub fn build_output_dir(output_dir: Option<&str>, prefix: &str) -> Result<PathBu
         // Use nanoseconds to ensure uniqueness even in same second
         let now = Local::now();
         let nanos = now.timestamp_subsec_nanos();
-        repo_root()
-            .join("tmp")
-            .join(format!("{prefix}-{}-{}", now.format("%Y%m%d-%H%M%S"), nanos))
+        repo_root().join("tmp").join(format!(
+            "{prefix}-{}-{}",
+            now.format("%Y%m%d-%H%M%S"),
+            nanos
+        ))
     };
     fs::create_dir_all(&path).with_context(|| format!("failed to create {}", path.display()))?;
     path.canonicalize()
@@ -794,7 +795,10 @@ provider = "codex"
 
     #[test]
     fn run_status_serializes_correctly() {
-        assert_eq!(serde_json::to_string(&RunStatus::Pending).unwrap(), "\"pending\"");
+        assert_eq!(
+            serde_json::to_string(&RunStatus::Pending).unwrap(),
+            "\"pending\""
+        );
         assert_eq!(
             serde_json::to_string(&RunStatus::Running).unwrap(),
             "\"running\""
@@ -832,8 +836,13 @@ provider = "codex"
     #[test]
     fn run_request_builder_pattern() {
         let config = serde_json::json!({"provider": "claude", "widths": [800, 1200]});
-        let request = RunRequest::new("rust_chatbot", "debug", ExecutionMode::StartupDriven, config.clone())
-            .with_output_dir("tmp/output");
+        let request = RunRequest::new(
+            "rust_chatbot",
+            "debug",
+            ExecutionMode::StartupDriven,
+            config.clone(),
+        )
+        .with_output_dir("tmp/output");
 
         assert_eq!(request.target, "rust_chatbot");
         assert_eq!(request.scenario, "debug");
@@ -889,7 +898,11 @@ provider = "codex"
     fn run_result_error() {
         let output_dir = PathBuf::from("/tmp/test-output");
         let report_path = PathBuf::from("/tmp/test-output/report.json");
-        let result = RunResult::error(output_dir.clone(), report_path.clone(), "process exited early");
+        let result = RunResult::error(
+            output_dir.clone(),
+            report_path.clone(),
+            "process exited early",
+        );
 
         assert_eq!(result.status, RunStatus::Error);
         assert_eq!(result.output_dir, output_dir);
@@ -907,7 +920,11 @@ provider = "codex"
 
     #[test]
     fn run_result_error_includes_error_field() {
-        let result = RunResult::error(PathBuf::from("/tmp"), PathBuf::from("/tmp/report.json"), "test error");
+        let result = RunResult::error(
+            PathBuf::from("/tmp"),
+            PathBuf::from("/tmp/report.json"),
+            "test error",
+        );
         let json = serde_json::to_string(&result).unwrap();
         assert!(json.contains("error"));
         assert!(json.contains("test error"));
@@ -958,7 +975,10 @@ provider = "codex"
     #[test]
     fn normalize_name_converts_hyphen_to_underscore() {
         assert_eq!(normalize_name("rust-chatbot"), "rust_chatbot");
-        assert_eq!(normalize_name("gpui-component-testing"), "gpui_component_testing");
+        assert_eq!(
+            normalize_name("gpui-component-testing"),
+            "gpui_component_testing"
+        );
     }
 
     #[test]
@@ -1032,11 +1052,17 @@ provider = "codex"
             r#"{"type":"pid","value":12345}"#
         );
         assert_eq!(
-            serde_json::to_string(&WindowSelector::Title { value: "test".to_string() }).unwrap(),
+            serde_json::to_string(&WindowSelector::Title {
+                value: "test".to_string()
+            })
+            .unwrap(),
             r#"{"type":"title","value":"test"}"#
         );
         assert_eq!(
-            serde_json::to_string(&WindowSelector::TitlePattern { value: ".*test.*".to_string() }).unwrap(),
+            serde_json::to_string(&WindowSelector::TitlePattern {
+                value: ".*test.*".to_string()
+            })
+            .unwrap(),
             r#"{"type":"title_pattern","value":".*test.*"}"#
         );
     }
@@ -1052,12 +1078,18 @@ provider = "codex"
             WindowSelector::Pid { value: 12345 }
         );
         assert_eq!(
-            serde_json::from_str::<WindowSelector>(r#"{"type":"title","value":"mywindow"}"#).unwrap(),
-            WindowSelector::Title { value: "mywindow".to_string() }
+            serde_json::from_str::<WindowSelector>(r#"{"type":"title","value":"mywindow"}"#)
+                .unwrap(),
+            WindowSelector::Title {
+                value: "mywindow".to_string()
+            }
         );
         assert_eq!(
-            serde_json::from_str::<WindowSelector>(r#"{"type":"title_pattern","value":".*"}"#).unwrap(),
-            WindowSelector::TitlePattern { value: ".*".to_string() }
+            serde_json::from_str::<WindowSelector>(r#"{"type":"title_pattern","value":".*"}"#)
+                .unwrap(),
+            WindowSelector::TitlePattern {
+                value: ".*".to_string()
+            }
         );
     }
 
@@ -1075,7 +1107,9 @@ provider = "codex"
         assert!(json.contains("\"/var/log/app.log\""));
         assert!(json.contains("\"*.log.*\""));
 
-        let env_var = TraceSource::EnvVar { name: "TRACE_FILE".to_string() };
+        let env_var = TraceSource::EnvVar {
+            name: "TRACE_FILE".to_string(),
+        };
         assert_eq!(
             serde_json::to_string(&env_var).unwrap(),
             r#"{"type":"env_var","name":"TRACE_FILE"}"#
@@ -1088,9 +1122,9 @@ provider = "codex"
             serde_json::from_str::<TraceSource>(r#"{"type":"none"}"#).unwrap(),
             TraceSource::None
         );
-        let file: TraceSource = serde_json::from_str(
-            r#"{"type":"file","path":"/tmp/trace.log","pattern":"*.log.*"}"#
-        ).unwrap();
+        let file: TraceSource =
+            serde_json::from_str(r#"{"type":"file","path":"/tmp/trace.log","pattern":"*.log.*"}"#)
+                .unwrap();
         match file {
             TraceSource::File { path, pattern } => {
                 assert_eq!(path, PathBuf::from("/tmp/trace.log"));
@@ -1100,7 +1134,9 @@ provider = "codex"
         }
         assert_eq!(
             serde_json::from_str::<TraceSource>(r#"{"type":"env_var","name":"MY_TRACE"}"#).unwrap(),
-            TraceSource::EnvVar { name: "MY_TRACE".to_string() }
+            TraceSource::EnvVar {
+                name: "MY_TRACE".to_string()
+            }
         );
     }
 
@@ -1163,7 +1199,9 @@ provider = "codex"
     #[test]
     fn launch_strategy_serializes_correctly() {
         let existing = LaunchStrategy::ExistingWindow {
-            selector: WindowSelector::Title { value: "test".to_string() },
+            selector: WindowSelector::Title {
+                value: "test".to_string(),
+            },
         };
         let json = serde_json::to_string(&existing).unwrap();
         assert!(json.contains("\"type\":\"existing_window\""));
@@ -1188,9 +1226,9 @@ provider = "codex"
 
     #[test]
     fn launch_strategy_deserializes_correctly() {
-        let existing: LaunchStrategy = serde_json::from_str(
-            r#"{"type":"existing_window","selector":{"type":"active"}}"#
-        ).unwrap();
+        let existing: LaunchStrategy =
+            serde_json::from_str(r#"{"type":"existing_window","selector":{"type":"active"}}"#)
+                .unwrap();
         match existing {
             LaunchStrategy::ExistingWindow { selector } => {
                 assert_eq!(selector, WindowSelector::Active);
@@ -1202,7 +1240,10 @@ provider = "codex"
             r#"{"type":"managed_process","command":{"program":"/bin/ls","args":["-l"]},"background":true}"#
         ).unwrap();
         match managed {
-            LaunchStrategy::ManagedProcess { command, background } => {
+            LaunchStrategy::ManagedProcess {
+                command,
+                background,
+            } => {
                 assert_eq!(command.program, PathBuf::from("/bin/ls"));
                 assert!(background);
             }
@@ -1213,7 +1254,10 @@ provider = "codex"
             r#"{"type":"autonomous_process","command":{"program":"/bin/daemon"},"background":false}"#
         ).unwrap();
         match autonomous {
-            LaunchStrategy::AutonomousProcess { command, background } => {
+            LaunchStrategy::AutonomousProcess {
+                command,
+                background,
+            } => {
                 assert_eq!(command.program, PathBuf::from("/bin/daemon"));
                 assert!(!background);
             }
@@ -1245,13 +1289,11 @@ provider = "codex"
                 path: PathBuf::from("/var/log/test.log"),
                 pattern: None,
             },
-            import_sources: vec![
-                ImportSource {
-                    kind: "csv".to_string(),
-                    source: "*.csv".to_string(),
-                    dest: None,
-                },
-            ],
+            import_sources: vec![ImportSource {
+                kind: "csv".to_string(),
+                source: "*.csv".to_string(),
+                dest: None,
+            }],
         };
 
         let json = serde_json::to_string(&run).unwrap();
@@ -1424,11 +1466,7 @@ provider = "codex"
             self.scenarios.clone()
         }
 
-        fn prepare(
-            &self,
-            ctx: &AdapterContext,
-            spec: &ScenarioSpec,
-        ) -> Result<PreparedRun> {
+        fn prepare(&self, ctx: &AdapterContext, spec: &ScenarioSpec) -> Result<PreparedRun> {
             Ok(PreparedRun {
                 strategy: LaunchStrategy::ManagedProcess {
                     command: CommandSpec::new(ctx.app_root.join("bin/target")),
@@ -1440,11 +1478,7 @@ provider = "codex"
             })
         }
 
-        fn launch(
-            &self,
-            ctx: &AdapterContext,
-            prepared: &PreparedRun,
-        ) -> Result<LaunchedRun> {
+        fn launch(&self, ctx: &AdapterContext, prepared: &PreparedRun) -> Result<LaunchedRun> {
             Ok(LaunchedRun {
                 pid: Some(42),
                 window_id: None,
@@ -1453,11 +1487,7 @@ provider = "codex"
             })
         }
 
-        fn collect(
-            &self,
-            ctx: &AdapterContext,
-            run: &LaunchedRun,
-        ) -> Result<CollectedData> {
+        fn collect(&self, ctx: &AdapterContext, run: &LaunchedRun) -> Result<CollectedData> {
             Ok(CollectedData::default())
         }
 

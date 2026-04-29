@@ -74,7 +74,7 @@ pub fn run(args: Args) -> Result<()> {
     Ok(())
 }
 
-fn validate_selected_scenario(
+pub fn validate_selected_scenario(
     target: &str,
     scenario: &str,
     value: &serde_json::Value,
@@ -215,9 +215,10 @@ mod tests {
                 "run_ms": 5000
             }
         });
-        let err = validate_selected_scenario("gpui_component_testing", "conversation_paint", &value)
-            .unwrap_err()
-            .to_string();
+        let err =
+            validate_selected_scenario("gpui_component_testing", "conversation_paint", &value)
+                .unwrap_err()
+                .to_string();
         assert!(err.contains("thread") || err.contains("required"));
     }
 }

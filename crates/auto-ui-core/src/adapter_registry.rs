@@ -134,11 +134,7 @@ impl AdapterRegistry {
     }
 
     /// Validates that a scenario exists for the given target.
-    pub fn validate_scenario(
-        &self,
-        target: &str,
-        scenario: &str,
-    ) -> anyhow::Result<()> {
+    pub fn validate_scenario(&self, target: &str, scenario: &str) -> anyhow::Result<()> {
         let adapter = self.get_required(target)?;
         if adapter.adapter().supports_scenario(scenario) {
             Ok(())
@@ -163,7 +159,9 @@ impl AdapterRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AdapterContext, ScenarioRef, ScenarioSpec, PreparedRun, LaunchedRun, CollectedData};
+    use crate::{
+        AdapterContext, CollectedData, LaunchedRun, PreparedRun, ScenarioRef, ScenarioSpec,
+    };
 
     struct TestAdapter {
         id: &'static str,
@@ -319,7 +317,9 @@ mod tests {
         let result = reg.validate_scenario("test", "unknown_scenario");
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(err.to_string().contains("unknown scenario 'unknown_scenario' for target 'test'"));
+        assert!(err
+            .to_string()
+            .contains("unknown scenario 'unknown_scenario' for target 'test'"));
         assert!(err.to_string().contains("known_scenario"));
     }
 

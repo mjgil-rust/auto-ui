@@ -9,7 +9,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::{Event, LaunchedRun, WindowSelector, log_line};
+use crate::{log_line, Event, LaunchedRun, WindowSelector};
 
 /// Configuration for interactive window orchestration.
 #[derive(Clone, Debug)]
@@ -97,7 +97,11 @@ pub mod foreground_events {
 fn make_foreground_event(action: &str, window_id: &str, message: &str) -> Event {
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| chrono::DateTime::from_timestamp(d.as_secs() as i64, 0).unwrap().to_rfc3339())
+        .map(|d| {
+            chrono::DateTime::from_timestamp(d.as_secs() as i64, 0)
+                .unwrap()
+                .to_rfc3339()
+        })
         .unwrap_or_else(|_| "1970-01-01T00:00:00Z".to_string());
 
     Event {
@@ -172,7 +176,12 @@ impl InteractiveWindowOrchestrator {
     }
 
     /// Resizes a window to the given dimensions.
-    pub fn resize_window(&self, window_id: &str, width: u32, height: u32) -> Result<WindowGeometry> {
+    pub fn resize_window(
+        &self,
+        window_id: &str,
+        width: u32,
+        height: u32,
+    ) -> Result<WindowGeometry> {
         Self::validate_window_id(window_id)?;
 
         if self.config.window_selector == WindowSelector::Active {
@@ -199,8 +208,13 @@ impl InteractiveWindowOrchestrator {
         }
 
         // Log the foreground control event for auditing
-        let event = make_foreground_event(foreground_events::WINDOW_ACTIVATED, window_id, "activated");
-        log_line(format!("[EVENT] {}: {:?}", event.kind, event.message), self.config.progress_log.as_deref()).ok();
+        let event =
+            make_foreground_event(foreground_events::WINDOW_ACTIVATED, window_id, "activated");
+        log_line(
+            format!("[EVENT] {}: {:?}", event.kind, event.message),
+            self.config.progress_log.as_deref(),
+        )
+        .ok();
 
         // In a full implementation, this would call the window driver
         // and verify the window accepts focus
@@ -214,7 +228,11 @@ impl InteractiveWindowOrchestrator {
 
         // Log the foreground control event for auditing
         let event = make_foreground_event(foreground_events::WINDOW_LOWERED, window_id, "lowered");
-        log_line(format!("[EVENT] {}: {:?}", event.kind, event.message), self.config.progress_log.as_deref()).ok();
+        log_line(
+            format!("[EVENT] {}: {:?}", event.kind, event.message),
+            self.config.progress_log.as_deref(),
+        )
+        .ok();
 
         // In a full implementation, this would call the window driver
         // and verify the window was successfully lowered
@@ -248,10 +266,7 @@ impl InteractiveWindowOrchestrator {
     /// 4. Capture screenshot if needed
     /// 5. Lower window (if keep_front is false)
     /// 6. Restore state
-    pub fn run_interactive_scenario(
-        &self,
-        launched: &LaunchedRun,
-    ) -> Result<WindowState> {
+    pub fn run_interactive_scenario(&self, launched: &LaunchedRun) -> Result<WindowState> {
         // For interactive window scenarios, we work with the launched window
         let window_id = launched
             .window_id
@@ -284,8 +299,8 @@ impl InteractiveWindowOrchestrator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::BTreeMap;
     use crate::CommandSpec;
+    use std::collections::BTreeMap;
 
     #[test]
     fn interactive_config_default() {
@@ -304,7 +319,10 @@ mod tests {
             .with_keep_front(true)
             .with_window_timeout(Duration::from_secs(60));
 
-        assert!(matches!(config.window_selector, WindowSelector::Pid { value: 1234 }));
+        assert!(matches!(
+            config.window_selector,
+            WindowSelector::Pid { value: 1234 }
+        ));
         assert_eq!(config.initial_geometry, Some((1024, 768)));
         assert!(config.keep_front);
         assert_eq!(config.window_timeout, Duration::from_secs(60));
@@ -340,7 +358,10 @@ mod tests {
 
         let result = orchestrator.resize_window("0x12345678", 1024, 768);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("no window selector"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("no window selector"));
     }
 
     #[test]
@@ -386,7 +407,8 @@ mod tests {
         let config = InteractiveOrchestrationConfig::default();
         let orchestrator = InteractiveWindowOrchestrator::new(config);
 
-        let result = orchestrator.screenshot_window("0x12345678", &PathBuf::from("/tmp/screenshot.png"));
+        let result =
+            orchestrator.screenshot_window("0x12345678", &PathBuf::from("/tmp/screenshot.png"));
         assert!(result.is_ok());
     }
 
@@ -448,8 +470,7 @@ mod tests {
     #[test]
     fn run_interactive_scenario_with_keep_front_true_and_active_selector_fails() {
         // keep_front=true with Active selector should fail on activate
-        let config = InteractiveOrchestrationConfig::default()
-            .with_keep_front(true); // keep_front=true but selector is Active (default)
+        let config = InteractiveOrchestrationConfig::default().with_keep_front(true); // keep_front=true but selector is Active (default)
         let orchestrator = InteractiveWindowOrchestrator::new(config);
 
         let launched = LaunchedRun {
@@ -461,7 +482,10 @@ mod tests {
 
         let result = orchestrator.run_interactive_scenario(&launched);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("no window selector"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("no window selector"));
     }
 
     #[test]

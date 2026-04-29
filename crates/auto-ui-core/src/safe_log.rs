@@ -57,7 +57,10 @@ pub fn redact_command_args(args: &[String]) -> Vec<String> {
                 || lower.contains("secret")
                 || lower.contains("password")
                 || lower.contains("api_key")
-                || (arg.len() > 20 && arg.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_'))
+                || (arg.len() > 20
+                    && arg
+                        .chars()
+                        .all(|c| c.is_alphanumeric() || c == '-' || c == '_'))
             {
                 "[REDACTED]".to_string()
             } else {
@@ -93,8 +96,14 @@ mod tests {
 
         let filtered = redact_env_vars();
 
-        assert_eq!(filtered.get("MY_SECRET_TOKEN"), Some(&"[REDACTED]".to_string()));
-        assert_eq!(filtered.get("NORMAL_VAR"), Some(&"normal_value".to_string()));
+        assert_eq!(
+            filtered.get("MY_SECRET_TOKEN"),
+            Some(&"[REDACTED]".to_string())
+        );
+        assert_eq!(
+            filtered.get("NORMAL_VAR"),
+            Some(&"normal_value".to_string())
+        );
 
         env::remove_var("MY_SECRET_TOKEN");
         env::remove_var("NORMAL_VAR");
@@ -104,7 +113,10 @@ mod tests {
     fn redact_env_vars_redacts_partial_match() {
         env::set_var("ANTHROPIC_API_KEY", "sk-ant-abc123");
         let filtered = redact_env_vars();
-        assert_eq!(filtered.get("ANTHROPIC_API_KEY"), Some(&"[REDACTED]".to_string()));
+        assert_eq!(
+            filtered.get("ANTHROPIC_API_KEY"),
+            Some(&"[REDACTED]".to_string())
+        );
         env::remove_var("ANTHROPIC_API_KEY");
     }
 

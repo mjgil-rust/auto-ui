@@ -1,0 +1,46 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTUP_HOME: /home/m/.rustup
+  CARGO_HOME: /home/m/.cargo
+
+jobs:
+  test:
+    name: Test suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          version: 1.95.0
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "auto-ui"
+          workspaces: crates
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Check all crates compile
+        run: cargo check --workspace
+
+      - name: Run unit/integration tests
+        run: cargo test --workspace -- --test-threads=4
+
+      - name: Build release
+        run: cargo build --release --workspace

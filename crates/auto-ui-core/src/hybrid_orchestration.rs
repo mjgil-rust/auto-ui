@@ -10,9 +10,8 @@ use std::time::Duration;
 use anyhow::Result;
 
 use crate::{
-    InteractiveOrchestrationConfig, InteractiveWindowOrchestrator,
-    LaunchedRun, PreparedRun, StartupOrchestrationConfig, StartupOrchestrator,
-    WindowSelector, WindowState,
+    InteractiveOrchestrationConfig, InteractiveWindowOrchestrator, LaunchedRun, PreparedRun,
+    StartupOrchestrationConfig, StartupOrchestrator, WindowSelector, WindowState,
 };
 
 /// Configuration for hybrid orchestration.
@@ -116,9 +115,8 @@ impl HybridOrchestrator {
         // Phase 2: Interactive window management
         // If we have a window_id, apply interactive orchestration
         let window_state = if launched.window_id.is_some() {
-            let interactive = InteractiveWindowOrchestrator::new(
-                self.config.interactive_config.clone(),
-            );
+            let interactive =
+                InteractiveWindowOrchestrator::new(self.config.interactive_config.clone());
             Some(interactive.run_interactive_scenario(&launched)?)
         } else {
             None
@@ -146,9 +144,8 @@ impl HybridOrchestrator {
 
         // If we have a window_id, do interactive capture
         if let Some(ref window_id) = launched.window_id {
-            let interactive = InteractiveWindowOrchestrator::new(
-                self.config.interactive_config.clone(),
-            );
+            let interactive =
+                InteractiveWindowOrchestrator::new(self.config.interactive_config.clone());
 
             // Attach to get initial state
             let state = interactive.attach_to_window(window_id)?;
@@ -203,7 +200,10 @@ mod tests {
             .with_keep_front(true)
             .with_window_selector(WindowSelector::Pid { value: 1234 });
 
-        assert_eq!(config.interactive_config.initial_geometry, Some((1024, 768)));
+        assert_eq!(
+            config.interactive_config.initial_geometry,
+            Some((1024, 768))
+        );
         assert!(config.interactive_config.keep_front);
         assert!(matches!(
             config.interactive_config.window_selector,
@@ -235,22 +235,18 @@ mod tests {
 
     #[test]
     fn hybrid_config_with_startup_timeout() {
-        let config = HybridOrchestrationConfig::default()
-            .with_startup_timeout(Duration::from_secs(60));
+        let config =
+            HybridOrchestrationConfig::default().with_startup_timeout(Duration::from_secs(60));
 
-        assert_eq!(
-            config.startup_config.timeout,
-            Duration::from_secs(60)
-        );
+        assert_eq!(config.startup_config.timeout, Duration::from_secs(60));
     }
 
     #[test]
     fn hybrid_config_combines_startup_and_interactive() {
-        let startup_cfg = StartupOrchestrationConfig::default()
-            .with_timeout(Duration::from_secs(120));
+        let startup_cfg =
+            StartupOrchestrationConfig::default().with_timeout(Duration::from_secs(120));
 
-        let interactive_cfg = InteractiveOrchestrationConfig::default()
-            .with_geometry(800, 600);
+        let interactive_cfg = InteractiveOrchestrationConfig::default().with_geometry(800, 600);
 
         let config = HybridOrchestrationConfig::default()
             .with_startup_config(startup_cfg)

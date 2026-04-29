@@ -110,7 +110,12 @@ pub fn retry_with_backoff(
 
         match operation() {
             Ok(()) => {
-                debug!(attempt = attempt, elapsed_ms = start.elapsed().as_millis() as u64, "{} succeeded", op_name);
+                debug!(
+                    attempt = attempt,
+                    elapsed_ms = start.elapsed().as_millis() as u64,
+                    "{} succeeded",
+                    op_name
+                );
                 return Ok(());
             }
             Err(ref e) if !e.transient => {
@@ -147,9 +152,8 @@ pub fn retry_with_backoff(
                 std::thread::sleep(delay);
 
                 // Exponential backoff with cap
-                let new_delay = Duration::from_secs_f64(
-                    delay.as_secs_f64() * config.backoff_multiplier
-                );
+                let new_delay =
+                    Duration::from_secs_f64(delay.as_secs_f64() * config.backoff_multiplier);
                 delay = new_delay.min(config.max_delay);
             }
         }
@@ -328,6 +332,10 @@ mod tests {
         assert!(result.is_err());
         // Should have tried several times within 100ms
         let count = CALL_COUNT.load(std::sync::atomic::Ordering::SeqCst);
-        assert!(count >= 2, "expected at least 2 attempts in 100ms, got {}", count);
+        assert!(
+            count >= 2,
+            "expected at least 2 attempts in 100ms, got {}",
+            count
+        );
     }
 }

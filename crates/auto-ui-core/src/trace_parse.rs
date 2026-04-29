@@ -3,9 +3,9 @@
 //! This module provides parsers for different trace line formats
 //! emitted by rust-chatbot during debug sessions.
 
+use regex::Regex;
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
-use regex::Regex;
 
 use crate::TraceFields;
 
@@ -149,7 +149,10 @@ mod tests {
         let fields = parse_trace_fields(line);
 
         assert_eq!(fields.get("session_id"), Some(&"abc 123".to_string()));
-        assert_eq!(fields.get("path"), Some(&"/tmp/test with spaces".to_string()));
+        assert_eq!(
+            fields.get("path"),
+            Some(&"/tmp/test with spaces".to_string())
+        );
     }
 
     #[test]

@@ -8,7 +8,7 @@ use tracing::{info, warn};
 
 use anyhow::Result;
 
-use crate::{AdapterContext, CollectedData, LaunchedRun, TargetAdapter, log_line};
+use crate::{log_line, AdapterContext, CollectedData, LaunchedRun, TargetAdapter};
 
 /// Result of an adapter lifecycle operation.
 ///
@@ -79,7 +79,11 @@ pub fn run_lifecycle<A: TargetAdapter>(
     let prepared = match adapter.prepare(ctx, spec) {
         Ok(p) => {
             info!(adapter_id = %adapter.id(), "adapter prepared");
-            log_line(format!("[LIFECYCLE] {} prepared", adapter.id()), None::<&Path>).ok();
+            log_line(
+                format!("[LIFECYCLE] {} prepared", adapter.id()),
+                None::<&Path>,
+            )
+            .ok();
             p
         }
         Err(e) => {
@@ -93,7 +97,11 @@ pub fn run_lifecycle<A: TargetAdapter>(
     let launched = match adapter.launch(ctx, &prepared) {
         Ok(l) => {
             info!(adapter_id = %adapter.id(), pid = ?l.pid, "adapter launched");
-            log_line(format!("[LIFECYCLE] {} launched (pid={:?})", adapter.id(), l.pid), None::<&Path>).ok();
+            log_line(
+                format!("[LIFECYCLE] {} launched (pid={:?})", adapter.id(), l.pid),
+                None::<&Path>,
+            )
+            .ok();
             l
         }
         Err(e) => {
@@ -113,7 +121,11 @@ pub fn run_lifecycle<A: TargetAdapter>(
     let collected = match adapter.collect(ctx, &launched) {
         Ok(c) => {
             info!(adapter_id = %adapter.id(), "adapter data collected");
-            log_line(format!("[LIFECYCLE] {} collected", adapter.id()), None::<&Path>).ok();
+            log_line(
+                format!("[LIFECYCLE] {} collected", adapter.id()),
+                None::<&Path>,
+            )
+            .ok();
             c
         }
         Err(e) => {
@@ -132,7 +144,11 @@ pub fn run_lifecycle<A: TargetAdapter>(
     info!(adapter_id = %adapter.id(), "stopping adapter");
     let cleanup_result = run_cleanup(adapter, ctx, Some(&launched));
     info!(adapter_id = %adapter.id(), cleanup_called = %cleanup_result.called, "adapter stopped");
-    log_line(format!("[LIFECYCLE] {} stopped", adapter.id()), None::<&Path>).ok();
+    log_line(
+        format!("[LIFECYCLE] {} stopped", adapter.id()),
+        None::<&Path>,
+    )
+    .ok();
 
     LifecycleResult {
         result: Ok((launched, collected)),
@@ -228,14 +244,22 @@ impl<T> LifecycleReporter for LifecycleResult<T> {
         if result.is_success() {
             format!(
                 "lifecycle completed successfully (cleanup: {})",
-                if result.cleanup_called { "called" } else { "not needed" }
+                if result.cleanup_called {
+                    "called"
+                } else {
+                    "not needed"
+                }
             )
         } else {
             let err = result.result.as_ref().unwrap_err();
             format!(
                 "lifecycle failed: {} (cleanup: {}, cleanup_error: {:?})",
                 err,
-                if result.cleanup_called { "called" } else { "not called" },
+                if result.cleanup_called {
+                    "called"
+                } else {
+                    "not called"
+                },
                 result.cleanup_error
             )
         }
@@ -245,7 +269,10 @@ impl<T> LifecycleReporter for LifecycleResult<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AdapterContext, ScenarioRef, ScenarioSpec, PreparedRun, LaunchedRun, CollectedData, CommandSpec};
+    use crate::{
+        AdapterContext, CollectedData, CommandSpec, LaunchedRun, PreparedRun, ScenarioRef,
+        ScenarioSpec,
+    };
     use anyhow::bail;
     use std::path::PathBuf;
 
@@ -265,14 +292,13 @@ mod tests {
         }
 
         fn discover_scenarios(&self) -> Vec<ScenarioRef> {
-            vec![ScenarioRef { name: "test".to_string(), description: None }]
+            vec![ScenarioRef {
+                name: "test".to_string(),
+                description: None,
+            }]
         }
 
-        fn prepare(
-            &self,
-            _ctx: &AdapterContext,
-            _spec: &ScenarioSpec,
-        ) -> Result<PreparedRun> {
+        fn prepare(&self, _ctx: &AdapterContext, _spec: &ScenarioSpec) -> Result<PreparedRun> {
             if self.fail_on == "prepare" {
                 bail!("prepare failed")
             }
@@ -314,7 +340,10 @@ mod tests {
         }
 
         fn discover_scenarios(&self) -> Vec<ScenarioRef> {
-            vec![ScenarioRef { name: "test".to_string(), description: None }]
+            vec![ScenarioRef {
+                name: "test".to_string(),
+                description: None,
+            }]
         }
 
         fn prepare(&self, _ctx: &AdapterContext, _spec: &ScenarioSpec) -> Result<PreparedRun> {
@@ -469,14 +498,13 @@ mod tests {
         }
 
         fn discover_scenarios(&self) -> Vec<ScenarioRef> {
-            vec![ScenarioRef { name: "test".to_string(), description: None }]
+            vec![ScenarioRef {
+                name: "test".to_string(),
+                description: None,
+            }]
         }
 
-        fn prepare(
-            &self,
-            _ctx: &AdapterContext,
-            _spec: &ScenarioSpec,
-        ) -> Result<PreparedRun> {
+        fn prepare(&self, _ctx: &AdapterContext, _spec: &ScenarioSpec) -> Result<PreparedRun> {
             Ok(PreparedRun::default())
         }
 

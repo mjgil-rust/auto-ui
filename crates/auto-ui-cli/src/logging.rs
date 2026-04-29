@@ -5,9 +5,8 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Env
 pub fn init() {
     let json_mode = env::var("AUTO_UI_JSON_LOG").is_ok();
 
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-        EnvFilter::new("info,auto_ui=debug")
-    });
+    let filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info,auto_ui=debug"));
 
     if json_mode {
         tracing_subscriber::registry()
