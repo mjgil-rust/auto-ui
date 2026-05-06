@@ -7,21 +7,6 @@ use crate::TargetAdapter;
 
 use anyhow::bail;
 
-/// Error type for adapter registry operations.
-#[derive(Debug, Clone)]
-pub struct AdapterError {
-    pub target: String,
-    pub message: String,
-}
-
-impl std::fmt::Display for AdapterError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "adapter error for '{}': {}", self.target, self.message)
-    }
-}
-
-impl std::error::Error for AdapterError {}
-
 /// A boxed adapter that can be stored in the registry.
 pub type BoxedAdapter = Box<dyn TargetAdapter>;
 

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use auto_ui_adapter_rust_chatbot::{run_debug, DebugConfig, Provider};
-use clap::{Args as ClapArgs, CommandFactory};
+use clap::Args as ClapArgs;
 
 #[derive(Clone, Debug, ClapArgs)]
 pub struct Args {

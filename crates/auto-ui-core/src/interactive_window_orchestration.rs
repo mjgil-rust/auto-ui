@@ -120,14 +120,6 @@ pub struct InteractiveWindowOrchestrator {
     config: InteractiveOrchestrationConfig,
 }
 
-/// Result of an interactive window scenario, including any foreground control events.
-pub struct InteractiveWindowResult {
-    /// The window state that was captured.
-    pub state: WindowState,
-    /// Foreground control events that were emitted during the scenario.
-    pub events: Vec<Event>,
-}
-
 impl InteractiveWindowOrchestrator {
     /// Creates a new orchestrator with the given configuration.
     pub fn new(config: InteractiveOrchestrationConfig) -> Self {
@@ -240,7 +232,7 @@ impl InteractiveWindowOrchestrator {
     }
 
     /// Captures a screenshot of a window.
-    pub fn screenshot_window(&self, window_id: &str, output_path: &PathBuf) -> Result<()> {
+    pub fn screenshot_window(&self, window_id: &str, _output_path: &PathBuf) -> Result<()> {
         Self::validate_window_id(window_id)?;
 
         // In a full implementation, this would call the window driver
@@ -249,7 +241,7 @@ impl InteractiveWindowOrchestrator {
     }
 
     /// Restores window state after manipulation.
-    pub fn restore_window_state(&self, window_id: &str, state: &WindowState) -> Result<()> {
+    pub fn restore_window_state(&self, window_id: &str, _state: &WindowState) -> Result<()> {
         Self::validate_window_id(window_id)?;
 
         // In a full implementation, this would restore geometry and z-order

@@ -69,7 +69,7 @@ impl HeadlessDisplay {
         #[cfg(unix)]
         openbox.process_group(0); // own PGID so we can kill the whole group safely
 
-        let mut openbox = openbox.spawn().map_err(|e| {
+        let openbox = openbox.spawn().map_err(|e| {
             // Clean up started Xvfb before returning error
             let _ = xvfb.kill();
             let _ = xvfb.wait();

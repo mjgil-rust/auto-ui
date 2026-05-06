@@ -141,8 +141,6 @@ impl StartupOrchestrator {
         )?;
 
         // Wait for completion with timeout
-        let deadline = start + self.config.timeout;
-
         let exit_status = loop {
             // Check if we've exceeded the timeout
             let elapsed = start.elapsed();

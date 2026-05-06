@@ -5,7 +5,7 @@ edition.workspace = true
 
 [lib]
 name = "auto_ui_cli"
-path = "src/main.rs"
+path = "src/lib.rs"
 
 [dependencies]
 anyhow.workspace = true

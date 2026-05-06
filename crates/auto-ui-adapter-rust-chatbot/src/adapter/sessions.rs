@@ -321,6 +321,7 @@ fn newest_trace_log() -> Result<PathBuf> {
 /// Get the newest trace log that was modified after the given reference time.
 /// This is used after launch to find the log file that the newly launched
 /// window is writing to, rather than just picking the lexicographically newest.
+#[cfg(test)]
 fn newest_trace_log_since(reference_time: std::time::SystemTime) -> Result<PathBuf> {
     let log_dir = rust_chatbot_log_dir()?;
     let mut candidates = Vec::new();
@@ -350,4 +351,3 @@ fn newest_trace_log_since(reference_time: std::time::SystemTime) -> Result<PathB
     candidates.sort_by(|a, b| b.1.cmp(&a.1)); // Sort by modified time, newest first
     Ok(candidates.into_iter().next().unwrap().0)
 }
-

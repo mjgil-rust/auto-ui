@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 use auto_ui_adapter_gpui as gpui;
 use auto_ui_adapter_rust_chatbot as rust_chatbot;
 use auto_ui_core::{normalize_name, parse_scenario_file, HeadlessDisplay};
-use clap::{Args as ClapArgs, CommandFactory};
+use clap::Args as ClapArgs;
 
 const SUPPORTED_TARGETS: &[&str] = &["rust_chatbot", "gpui_component_testing"];
 const DEFAULT_GEOMETRY: &str = "1280x800x24";

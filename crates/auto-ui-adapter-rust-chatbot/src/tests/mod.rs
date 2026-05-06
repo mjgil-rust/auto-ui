@@ -168,7 +168,7 @@ fn resolve_app_root_returns_error_when_no_path_found() {
 fn resolve_app_root_expands_tilde() {
     // Test that ~ is expanded in paths
     let temp = unique_temp_dir("resolve-app-root-tilde");
-    let tilde_path = format!("~/{}", temp.file_name().unwrap().to_string_lossy());
+    let _tilde_path = format!("~/{}", temp.file_name().unwrap().to_string_lossy());
     // Note: we can't easily test tilde expansion here without a known home,
     // but we can verify the function doesn't panic
     let _ = temp; // unused in this test, just for documentation

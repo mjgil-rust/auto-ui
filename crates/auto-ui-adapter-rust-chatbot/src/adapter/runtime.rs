@@ -187,13 +187,14 @@ fn load_session_by_id_from_map(
 
 /// Load a session by name from an already-parsed sessions map.
 /// Useful for testing with mock data.
+#[cfg(test)]
 fn load_session_by_name_from_map(
     sessions_map: Map<String, Value>,
     provider: Provider,
     session_name: &str,
     include_hidden: bool,
 ) -> Result<SessionEntry> {
-    let mut candidates: Vec<&Map<String, Value>> = sessions_map
+    let candidates: Vec<&Map<String, Value>> = sessions_map
         .values()
         .filter_map(|v| v.as_object())
         .filter(|raw| {

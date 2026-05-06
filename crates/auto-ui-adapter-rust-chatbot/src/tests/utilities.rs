@@ -210,7 +210,7 @@ echo "RUST_CHATBOT_START_SESSION_ID=$RUST_CHATBOT_START_SESSION_ID" >> "$2"
         fs::set_permissions(&capture_script, fs::Permissions::from_mode(0o755)).unwrap();
     }
 
-    let output_file = temp.join("env_output.txt");
+    let _output_file = temp.join("env_output.txt");
     let result = launch_window(&temp, Provider::Claude, None, None);
     // The actual launch won't succeed (fake binary doesn't properly daemonize),
     // but we can verify it tried to set up env vars by checking logs
