@@ -202,6 +202,17 @@ pub fn window_exists(window_id: &str) -> Result<bool> {
     Ok(output.status.success())
 }
 
+pub fn get_window_pid(window_id: &str) -> Result<Option<i32>> {
+    let mut cmd = Command::new("xdotool");
+    cmd.arg("getwindowpid").arg(window_id);
+    let output = run_command(&mut cmd, false)?;
+    let pid = output.stdout.trim();
+    if pid.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(pid.parse::<i32>()?))
+}
+
 pub fn require_window(window_id: &str) -> Result<()> {
     if !window_exists(window_id)? {
         return Err(anyhow!("Window {window_id} is no longer available."));
