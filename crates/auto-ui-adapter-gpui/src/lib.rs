@@ -213,7 +213,10 @@ pub fn run_scroll_matrix(config: ScrollMatrixConfig) -> Result<CompletedRun> {
     // Resolve binary and args: either from custom command or from example
     let (binary, custom_args) = if let Some(ref cmd) = config.command {
         let (path, args) = parse_command_string(cmd)?;
-        log_line(format!("command_binary={}", path.display()), Some(&progress_path))?;
+        log_line(
+            format!("command_binary={}", path.display()),
+            Some(&progress_path),
+        )?;
         if !args.is_empty() {
             log_line(
                 format!("command_args={}", args.join(" ")),
@@ -410,7 +413,10 @@ pub fn run_scrollbar_trace(config: ScrollbarTraceConfig) -> Result<CompletedRun>
     // Resolve binary and args: either from custom command or from example
     let (binary, custom_args) = if let Some(ref cmd) = config.command {
         let (path, args) = parse_command_string(cmd)?;
-        log_line(format!("command_binary={}", path.display()), Some(&progress_path))?;
+        log_line(
+            format!("command_binary={}", path.display()),
+            Some(&progress_path),
+        )?;
         if !args.is_empty() {
             log_line(
                 format!("command_args={}", args.join(" ")),
@@ -585,7 +591,10 @@ pub fn run_conversation_paint(config: ConversationPaintConfig) -> Result<Complet
     // Resolve binary and args: either from custom command or from example
     let (binary, custom_args) = if let Some(ref cmd) = config.command {
         let (path, args) = parse_command_string(cmd)?;
-        log_line(format!("command_binary={}", path.display()), Some(&progress_path))?;
+        log_line(
+            format!("command_binary={}", path.display()),
+            Some(&progress_path),
+        )?;
         if !args.is_empty() {
             log_line(
                 format!("command_args={}", args.join(" ")),
@@ -1032,8 +1041,12 @@ fn run_process_with_optional_capture(
         let _ = x11::background_window(&window_id, restore_window_id.as_deref());
         if capture_window {
             if let Some(screenshot_path) = screenshot_path {
-                x11::capture_window_screenshot(&window_id, screenshot_path)
-                    .with_context(|| format!("failed to capture screenshot to {}", screenshot_path.display()))?;
+                x11::capture_window_screenshot(&window_id, screenshot_path).with_context(|| {
+                    format!(
+                        "failed to capture screenshot to {}",
+                        screenshot_path.display()
+                    )
+                })?;
             }
         }
     }
@@ -1051,10 +1064,12 @@ fn run_process_with_optional_capture(
                         child.kill().ok();
                         let output = child.wait_with_output().ok();
                         if let Some(o) = output {
-                            fs::write(stdout_path, &o.stdout)
-                                .with_context(|| format!("failed to write {}", stdout_path.display()))?;
-                            fs::write(stderr_path, &o.stderr)
-                                .with_context(|| format!("failed to write {}", stderr_path.display()))?;
+                            fs::write(stdout_path, &o.stdout).with_context(|| {
+                                format!("failed to write {}", stdout_path.display())
+                            })?;
+                            fs::write(stderr_path, &o.stderr).with_context(|| {
+                                format!("failed to write {}", stderr_path.display())
+                            })?;
                         }
                         bail!("process timed out after {}ms", timeout);
                     }
@@ -1806,7 +1821,9 @@ mod tests {
         match result {
             Ok(_) => {}
             Err(e) => {
-                assert!(e.to_string().contains("gpui") || e.to_string().contains("Could not resolve"));
+                assert!(
+                    e.to_string().contains("gpui") || e.to_string().contains("Could not resolve")
+                );
             }
         }
     }
@@ -1844,7 +1861,10 @@ mod tests {
 
     #[test]
     fn resolve_app_root_app_root_takes_precedence() {
-        std::env::set_var("GPUI_COMPONENT_TESTING_ROOT", "/tmp/env-root-should-not-be-used");
+        std::env::set_var(
+            "GPUI_COMPONENT_TESTING_ROOT",
+            "/tmp/env-root-should-not-be-used",
+        );
         let temp = unique_temp_dir("explicit-precedence-gpui");
         let explicit_path = temp.display().to_string();
         let result = resolve_app_root(Some(&explicit_path));
@@ -2102,8 +2122,7 @@ exit 0
             command_cwd: None,
         };
 
-        let completed =
-            run_scrollbar_trace(config).expect("run_scrollbar_trace should succeed");
+        let completed = run_scrollbar_trace(config).expect("run_scrollbar_trace should succeed");
 
         // Read the report and verify artifacts
         let report = read_report_artifacts(&completed.report_path);
@@ -2243,8 +2262,7 @@ exit 0
             command_cwd: None,
         };
 
-        let completed =
-            run_scroll_matrix(config).expect("run_scroll_matrix should succeed");
+        let completed = run_scroll_matrix(config).expect("run_scroll_matrix should succeed");
 
         // Read the report and verify window_screenshot artifact is registered
         let report = read_report_artifacts(&completed.report_path);
@@ -2272,7 +2290,8 @@ exit 0
         std::fs::write(&bin_path, "#!/bin/sh").unwrap();
         std::fs::set_permissions(&bin_path, std::fs::Permissions::from_mode(0o755)).unwrap();
 
-        let (path, args) = parse_command_string(&format!("{} --arg1 --arg2", bin_path.to_string_lossy())).unwrap();
+        let (path, args) =
+            parse_command_string(&format!("{} --arg1 --arg2", bin_path.to_string_lossy())).unwrap();
         assert_eq!(path, bin_path);
         assert_eq!(args, vec!["--arg1", "--arg2"]);
         std::fs::remove_dir_all(temp).ok();

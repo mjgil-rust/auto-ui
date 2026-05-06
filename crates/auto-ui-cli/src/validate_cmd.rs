@@ -77,7 +77,9 @@ widths = []
         )
         .unwrap();
 
-        let args = ValidateScenarioArgs { config: path.clone() };
+        let args = ValidateScenarioArgs {
+            config: path.clone(),
+        };
         let result = run(&args);
         assert!(result.is_err());
         let _ = fs::remove_file(path);
@@ -96,7 +98,9 @@ scenario = "debug"
         )
         .unwrap();
 
-        let args = ValidateScenarioArgs { config: path.clone() };
+        let args = ValidateScenarioArgs {
+            config: path.clone(),
+        };
         let result = run(&args);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("unknown target"));
@@ -116,7 +120,9 @@ scenario = "nonexistent_scenario"
         )
         .unwrap();
 
-        let args = ValidateScenarioArgs { config: path.clone() };
+        let args = ValidateScenarioArgs {
+            config: path.clone(),
+        };
         let result = run(&args);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Unsupported"));

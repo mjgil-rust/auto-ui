@@ -87,7 +87,11 @@ pub fn sanitize_cwd_for_log() -> String {
 
 /// Formats launch info for logging: command, redacted env overrides, and cwd.
 /// This is safe to emit to progress logs since sensitive values are redacted.
-pub fn format_launch_info_for_log(command: &str, env_overrides: &[&str], cwd: Option<&str>) -> String {
+pub fn format_launch_info_for_log(
+    command: &str,
+    env_overrides: &[&str],
+    cwd: Option<&str>,
+) -> String {
     let mut info = format!("launching: {}", command);
 
     // Add env overrides (just the keys, values are already redacted in redact_env_vars output)
@@ -200,7 +204,8 @@ mod tests {
 
     #[test]
     fn format_launch_info_includes_command() {
-        let info = format_launch_info_for_log("chatbot-ctl start", &["RUST_LOG=debug"], Some("/tmp"));
+        let info =
+            format_launch_info_for_log("chatbot-ctl start", &["RUST_LOG=debug"], Some("/tmp"));
         assert!(info.contains("chatbot-ctl start"));
         assert!(info.contains("env:"));
         assert!(info.contains("cwd:"));

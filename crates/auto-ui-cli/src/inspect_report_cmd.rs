@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use auto_ui_artifacts::Report;
-use std::path::PathBuf;
 use serde::Deserialize;
+use std::path::PathBuf;
 
 #[derive(Debug, Deserialize, clap::Args)]
 pub struct Args {
@@ -67,7 +67,9 @@ mod tests {
     #[test]
     fn inspect_report_loads_valid_report() {
         let (report_path, _temp) = create_test_report();
-        let args = Args { report: report_path };
+        let args = Args {
+            report: report_path,
+        };
         // Should not panic - just verify it loads
         assert!(args.report.exists());
     }

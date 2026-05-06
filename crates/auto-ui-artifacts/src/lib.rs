@@ -630,12 +630,26 @@ mod tests {
 
         // Validate required fields
         let required_fields = [
-            "schema_version", "tool_version", "target", "scenario",
-            "mode", "app_root", "run_id", "started_at", "status",
-            "artifacts", "measurements", "events", "details",
+            "schema_version",
+            "tool_version",
+            "target",
+            "scenario",
+            "mode",
+            "app_root",
+            "run_id",
+            "started_at",
+            "status",
+            "artifacts",
+            "measurements",
+            "events",
+            "details",
         ];
         for field in required_fields {
-            assert!(json.get(field).is_some(), "required field '{}' must be present", field);
+            assert!(
+                json.get(field).is_some(),
+                "required field '{}' must be present",
+                field
+            );
         }
 
         // Validate status is one of the allowed values
@@ -648,7 +662,10 @@ mod tests {
 
         // Validate artifacts is an array with properly structured items
         let artifacts = json.get("artifacts").unwrap().as_array().unwrap();
-        assert!(!artifacts.is_empty(), "artifacts should not be empty for this test");
+        assert!(
+            !artifacts.is_empty(),
+            "artifacts should not be empty for this test"
+        );
         for art in artifacts {
             assert!(art.get("kind").is_some(), "artifact must have 'kind'");
             assert!(art.get("path").is_some(), "artifact must have 'path'");
@@ -656,17 +673,25 @@ mod tests {
 
         // Validate events is an array
         let events = json.get("events").unwrap().as_array().unwrap();
-        assert!(!events.is_empty(), "events should not be empty for this test");
+        assert!(
+            !events.is_empty(),
+            "events should not be empty for this test"
+        );
         for evt in events {
             assert!(evt.get("kind").is_some(), "event must have 'kind'");
-            assert!(evt.get("timestamp").is_some(), "event must have 'timestamp'");
+            assert!(
+                evt.get("timestamp").is_some(),
+                "event must have 'timestamp'"
+            );
         }
 
         // Validate measurements is an array
         let measurements = json.get("measurements").unwrap().as_array().unwrap();
         for m in measurements {
-            assert!(m.get("name").is_some() || m.get("value").is_some(),
-                "measurement should have 'name' and/or 'value'");
+            assert!(
+                m.get("name").is_some() || m.get("value").is_some(),
+                "measurement should have 'name' and/or 'value'"
+            );
         }
 
         // Validate details is present and non-null
@@ -676,7 +701,10 @@ mod tests {
         );
 
         // Validate finished_at is present after finish_ok
-        assert!(json.get("finished_at").is_some(), "finished_at must be present after finish");
+        assert!(
+            json.get("finished_at").is_some(),
+            "finished_at must be present after finish"
+        );
     }
 
     #[test]
@@ -732,10 +760,19 @@ mod tests {
         // Status should be 'error'
         assert_eq!(json.get("status").and_then(Value::as_str), Some("error"));
         // status_message should be present for error reports
-        assert!(json.get("status_message").is_some(), "error reports should have status_message");
-        assert!(!json.get("status_message").unwrap().is_null(), "status_message should not be null for error");
+        assert!(
+            json.get("status_message").is_some(),
+            "error reports should have status_message"
+        );
+        assert!(
+            !json.get("status_message").unwrap().is_null(),
+            "status_message should not be null for error"
+        );
         // finished_at should be present
-        assert!(json.get("finished_at").is_some(), "finished_at must be present for completed report");
+        assert!(
+            json.get("finished_at").is_some(),
+            "finished_at must be present for completed report"
+        );
     }
 
     #[test]
@@ -747,14 +784,22 @@ mod tests {
         // Status should be 'running' for unfinished reports
         assert_eq!(json.get("status").and_then(Value::as_str), Some("running"));
         // finished_at is skipped when None, so it should not be present
-        assert!(json.get("finished_at").is_none(), "running reports should skip finished_at");
+        assert!(
+            json.get("finished_at").is_none(),
+            "running reports should skip finished_at"
+        );
     }
 
     // Measurement schema conventions tests
 
     #[test]
     fn push_measurement_with_name_value_creates_required_fields() {
-        let mut report = Report::new("test_target", "test_scenario", "startup_driven", Path::new("/tmp"));
+        let mut report = Report::new(
+            "test_target",
+            "test_scenario",
+            "startup_driven",
+            Path::new("/tmp"),
+        );
         report.push_measurement_with_name_value("session_count", 5);
 
         assert_eq!(report.measurements.len(), 1);
@@ -765,7 +810,12 @@ mod tests {
 
     #[test]
     fn push_timed_measurement_includes_unit() {
-        let mut report = Report::new("test_target", "test_scenario", "startup_driven", Path::new("/tmp"));
+        let mut report = Report::new(
+            "test_target",
+            "test_scenario",
+            "startup_driven",
+            Path::new("/tmp"),
+        );
         report.push_timed_measurement("render_time", 150, "ms");
 
         assert_eq!(report.measurements.len(), 1);
@@ -777,7 +827,12 @@ mod tests {
 
     #[test]
     fn measurement_rows_support_timing_conventions() {
-        let mut report = Report::new("test_target", "test_scenario", "startup_driven", Path::new("/tmp"));
+        let mut report = Report::new(
+            "test_target",
+            "test_scenario",
+            "startup_driven",
+            Path::new("/tmp"),
+        );
         // Standard timing measurement
         report.push_measurement_with_name_value("prompt_latency_ms", 150);
         report.push_timed_measurement("render_time", 45, "ms");
@@ -790,12 +845,20 @@ mod tests {
         assert!(measurements[0].get("value").is_some());
 
         // Second should also have unit
-        assert_eq!(measurements[1].get("unit").and_then(Value::as_str), Some("ms"));
+        assert_eq!(
+            measurements[1].get("unit").and_then(Value::as_str),
+            Some("ms")
+        );
     }
 
     #[test]
     fn measurement_rows_support_count_conventions() {
-        let mut report = Report::new("test_target", "test_scenario", "startup_driven", Path::new("/tmp"));
+        let mut report = Report::new(
+            "test_target",
+            "test_scenario",
+            "startup_driven",
+            Path::new("/tmp"),
+        );
         report.push_measurement_with_name_value("rows_processed", 1000);
         report.push_measurement_with_name_value("messages_sent", 42);
 
@@ -803,10 +866,22 @@ mod tests {
         let measurements = json.get("measurements").unwrap().as_array().unwrap();
 
         assert_eq!(measurements.len(), 2);
-        assert_eq!(measurements[0].get("name").and_then(Value::as_str), Some("rows_processed"));
-        assert_eq!(measurements[0].get("value").and_then(Value::as_i64), Some(1000));
-        assert_eq!(measurements[1].get("name").and_then(Value::as_str), Some("messages_sent"));
-        assert_eq!(measurements[1].get("value").and_then(Value::as_i64), Some(42));
+        assert_eq!(
+            measurements[0].get("name").and_then(Value::as_str),
+            Some("rows_processed")
+        );
+        assert_eq!(
+            measurements[0].get("value").and_then(Value::as_i64),
+            Some(1000)
+        );
+        assert_eq!(
+            measurements[1].get("name").and_then(Value::as_str),
+            Some("messages_sent")
+        );
+        assert_eq!(
+            measurements[1].get("value").and_then(Value::as_i64),
+            Some(42)
+        );
     }
 
     // Artifact kind catalog tests
@@ -825,7 +900,11 @@ mod tests {
     #[test]
     fn validate_artifact_kind_accepts_stable_kinds() {
         for kind in artifact_kind::ALL {
-            assert!(validate_artifact_kind(kind).is_ok(), "should accept '{}'", kind);
+            assert!(
+                validate_artifact_kind(kind).is_ok(),
+                "should accept '{}'",
+                kind
+            );
         }
     }
 
@@ -843,8 +922,13 @@ mod tests {
     fn artifact_kind_catalog_exhaustive() {
         // Verify all expected stable kinds are in ALL
         let expected_kinds = [
-            "progress_log", "trace_log", "window_screenshot", "summary_csv",
-            "trace_csv", "conversation_csv", "summary_markdown",
+            "progress_log",
+            "trace_log",
+            "window_screenshot",
+            "summary_csv",
+            "trace_csv",
+            "conversation_csv",
+            "summary_markdown",
         ];
         assert_eq!(artifact_kind::ALL.len(), expected_kinds.len());
         for kind in expected_kinds {
@@ -1053,14 +1137,8 @@ mod tests {
             event.get("operation").and_then(Value::as_str),
             Some("window_discovery")
         );
-        assert_eq!(
-            event.get("attempt").and_then(Value::as_u64),
-            Some(2)
-        );
-        assert_eq!(
-            event.get("max_attempts").and_then(Value::as_u64),
-            Some(5)
-        );
+        assert_eq!(event.get("attempt").and_then(Value::as_u64), Some(2));
+        assert_eq!(event.get("max_attempts").and_then(Value::as_u64), Some(5));
         assert!(event.get("timestamp").is_some());
     }
 
@@ -1080,10 +1158,7 @@ mod tests {
             event.get("operation").and_then(Value::as_str),
             Some("trace_wait")
         );
-        assert_eq!(
-            event.get("timeout_secs").and_then(Value::as_u64),
-            Some(30)
-        );
+        assert_eq!(event.get("timeout_secs").and_then(Value::as_u64), Some(30));
         assert!(event.get("timestamp").is_some());
     }
 
@@ -1176,10 +1251,7 @@ mod tests {
 
         let event = &report.events[0];
         assert_eq!(event.get("kind").and_then(Value::as_str), Some("window"));
-        assert_eq!(
-            event.get("action").and_then(Value::as_str),
-            Some("resize")
-        );
+        assert_eq!(event.get("action").and_then(Value::as_str), Some("resize"));
         assert_eq!(
             event.get("window_id").and_then(Value::as_str),
             Some("0x789abc")
@@ -1280,7 +1352,10 @@ mod tests {
         let json = serde_json::to_value(&report).unwrap();
 
         // Verify all required top-level fields are present
-        assert!(json.get("schema_version").is_some(), "schema_version required");
+        assert!(
+            json.get("schema_version").is_some(),
+            "schema_version required"
+        );
         assert!(json.get("tool_version").is_some(), "tool_version required");
         assert_eq!(
             json.get("target").and_then(Value::as_str),
@@ -1359,7 +1434,9 @@ mod tests {
 
         // Verify screenshot artifact has expected structure
         let artifacts = json.get("artifacts").unwrap().as_array().unwrap();
-        let screenshot_art = artifacts.iter().find(|a| a.get("kind") == Some(&Value::String("screenshot".to_string())));
+        let screenshot_art = artifacts
+            .iter()
+            .find(|a| a.get("kind") == Some(&Value::String("screenshot".to_string())));
         assert!(screenshot_art.is_some(), "screenshot artifact should exist");
     }
 
@@ -1489,7 +1566,9 @@ mod tests {
 
         // Verify trace_csv artifact structure
         let artifacts = json.get("artifacts").unwrap().as_array().unwrap();
-        let trace_art = artifacts.iter().find(|a| a.get("kind") == Some(&Value::String("trace_csv".to_string())));
+        let trace_art = artifacts
+            .iter()
+            .find(|a| a.get("kind") == Some(&Value::String("trace_csv".to_string())));
         assert!(trace_art.is_some(), "trace_csv artifact should exist");
         assert!(trace_art.unwrap().get("path").is_some());
 
@@ -1541,7 +1620,9 @@ mod tests {
 
         // Verify conversation_csv artifact structure
         let artifacts = json.get("artifacts").unwrap().as_array().unwrap();
-        let conv_art = artifacts.iter().find(|a| a.get("kind") == Some(&Value::String("conversation_csv".to_string())));
+        let conv_art = artifacts
+            .iter()
+            .find(|a| a.get("kind") == Some(&Value::String("conversation_csv".to_string())));
         assert!(conv_art.is_some(), "conversation_csv artifact should exist");
 
         // details must be present
@@ -1554,13 +1635,21 @@ mod tests {
     #[test]
     fn normalize_artifact_path_converts_to_absolute() {
         let result = normalize_artifact_path("/tmp/test.log");
-        assert!(result.starts_with('/'), "should be absolute path: {}", result);
+        assert!(
+            result.starts_with('/'),
+            "should be absolute path: {}",
+            result
+        );
     }
 
     #[test]
     fn normalize_artifact_path_resolves_relative() {
         let result = normalize_artifact_path("test.log");
-        assert!(result.contains("test.log"), "should contain original name: {}", result);
+        assert!(
+            result.contains("test.log"),
+            "should contain original name: {}",
+            result
+        );
         assert!(result.starts_with('/'), "should be absolute: {}", result);
     }
 
@@ -1576,7 +1665,11 @@ mod tests {
             expected_prefix,
             result
         );
-        assert!(result.ends_with("test.log"), "should end with test.log: {}", result);
+        assert!(
+            result.ends_with("test.log"),
+            "should end with test.log: {}",
+            result
+        );
     }
 
     #[test]
@@ -1626,11 +1719,20 @@ mod tests {
         fs::write(&progress_path, "log content").unwrap();
         fs::write(&trace_path, "trace content").unwrap();
 
-        report.add_artifact("progress_log", progress_path.to_str().unwrap(), None, Value::Null);
+        report.add_artifact(
+            "progress_log",
+            progress_path.to_str().unwrap(),
+            None,
+            Value::Null,
+        );
         report.add_artifact("trace_log", trace_path.to_str().unwrap(), None, Value::Null);
 
         let result = validate_artifacts(&report);
-        assert!(result.is_ok(), "should succeed when all artifacts exist: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "should succeed when all artifacts exist: {:?}",
+            result
+        );
 
         // Cleanup
         let _ = fs::remove_file(progress_path);
@@ -1641,15 +1743,31 @@ mod tests {
     #[test]
     fn validate_artifacts_fails_when_missing() {
         let mut report = Report::new("rust_chatbot", "debug", "hybrid", Path::new("/tmp"));
-        report.add_artifact("progress_log", "/tmp/nonexistent/path/log.txt", None, Value::Null);
-        report.add_artifact("trace_log", "/tmp/also/missing/trace.log", None, Value::Null);
+        report.add_artifact(
+            "progress_log",
+            "/tmp/nonexistent/path/log.txt",
+            None,
+            Value::Null,
+        );
+        report.add_artifact(
+            "trace_log",
+            "/tmp/also/missing/trace.log",
+            None,
+            Value::Null,
+        );
 
         let result = validate_artifacts(&report);
         assert!(result.is_err(), "should fail when artifacts are missing");
 
         let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("missing"), "error should mention 'missing'");
-        assert!(err_msg.contains("2"), "error should mention count of missing artifacts");
+        assert!(
+            err_msg.contains("missing"),
+            "error should mention 'missing'"
+        );
+        assert!(
+            err_msg.contains("2"),
+            "error should mention count of missing artifacts"
+        );
     }
 
     #[test]
@@ -1662,8 +1780,14 @@ mod tests {
         assert!(result.is_err());
 
         let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("missing"), "error should mention 'missing'");
-        assert!(err_msg.contains("/tmp/does_not_exist.log"), "should include the missing path");
+        assert!(
+            err_msg.contains("missing"),
+            "error should mention 'missing'"
+        );
+        assert!(
+            err_msg.contains("/tmp/does_not_exist.log"),
+            "should include the missing path"
+        );
     }
 
     #[test]
@@ -1671,6 +1795,9 @@ mod tests {
         let report = Report::new("rust_chatbot", "debug", "hybrid", Path::new("/tmp"));
         // No artifacts - should succeed
         let result = validate_artifacts(&report);
-        assert!(result.is_ok(), "empty artifacts list should pass validation");
+        assert!(
+            result.is_ok(),
+            "empty artifacts list should pass validation"
+        );
     }
 }

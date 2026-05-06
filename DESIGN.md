@@ -219,254 +219,104 @@ Owns generic Linux desktop interaction:
 - capture screenshots
 - query geometry
 
-This crate should wrap `xdotool`, `wmctrl`, and ImageMagick initially, but hide
-them behind traits so a later backend can replace the shell tools.
-
 ### `auto-ui-adapter-rust-chatbot`
 
-App-specific logic for:
+Owns `rust-chatbot` specifics:
 
-- resolving `chatbot-ctl`
 - reading provider session metadata
-- launching targeted sessions
-- locating the current trace log
-- parsing `ui_auto_debug` and `ui_auto_debug_code_block` events
-- mapping session-oriented scenarios into launch inputs
+- launching provider-specific app instances
+- parsing `rust-chatbot` trace logs
+- scenario implementations for:
+  - `debug`
+  - `header_debug`
+  - `prompt_debug`
 
 ### `auto-ui-adapter-gpui`
 
-App-specific logic for:
+Owns `gpui-component-testing` specifics:
 
-- choosing an example binary or launch command
-- injecting scenario env vars
-- waiting for the app to auto-complete and exit
-- importing generated CSV/log/markdown artifacts
-- optionally attaching to the created window when screenshots are requested
+- launching an example binary with env vars
+- importing app-generated artifacts into the stable report format
+- scenario implementations for:
+  - `scroll_matrix`
+  - `scrollbar_trace`
+  - `conversation_paint`
 
-This adapter is the reason the system must support startup-driven scenarios as a
-first-class mode, not as an edge case.
+### `auto-ui-cli`
 
-## Adapter Interface
+Owns:
 
-Each target app should implement a common adapter trait.
-
-```rust
-pub trait TargetAdapter: Send + Sync {
-    /// Returns the unique identifier for this adapter (e.g., "rust_chatbot").
-    fn id(&self) -> &'static str;
-
-    /// Discovers available scenarios for this adapter.
-    fn discover_scenarios(&self) -> Vec<ScenarioRef>;
-
-    /// Validates that a scenario name is valid for this adapter.
-    fn supports_scenario(&self, scenario: &str) -> bool;
-
-    /// Prepares a run for the given scenario.
-    fn prepare(&self, ctx: &AdapterContext, spec: &ScenarioSpec) -> anyhow::Result<PreparedRun>;
-
-    /// Launches a prepared run.
-    fn launch(&self, ctx: &AdapterContext, prepared: &PreparedRun) -> anyhow::Result<LaunchedRun>;
-
-    /// Collects data from a completed or failed run.
-    fn collect(&self, ctx: &AdapterContext, run: &LaunchedRun) -> anyhow::Result<CollectedData>;
-
-    /// Stops a running scenario.
-    fn stop(&self, ctx: &AdapterContext, run: &LaunchedRun) -> anyhow::Result<()>;
-}
-```
-
-Supporting types:
-
-```rust
-pub struct AdapterContext {
-    pub app_root: std::path::PathBuf,
-    pub output_dir: std::path::PathBuf,
-    pub config: serde_json::Value,
-}
-
-pub struct ScenarioRef {
-    pub name: String,
-    pub description: Option<String>,
-}
-
-pub struct ScenarioSpec {
-    pub name: String,
-    pub config: serde_json::Value,
-}
-
-pub struct LaunchedRun {
-    pub pid: Option<u32>,
-    pub window_id: Option<String>,
-    pub command: CommandSpec,
-    pub env: std::collections::BTreeMap<String, String>,
-}
-
-pub struct CollectedData {
-    pub measurements: Vec<Measurement>,
-    pub events: Vec<Event>,
-    pub trace_fields: TraceFields,
-    pub artifacts: Vec<ArtifactRef>,
-}
-
-pub struct Measurement {
-    pub name: String,
-    pub value: f64,
-    pub unit: Option<String>,
-}
-
-pub struct Event {
-    pub timestamp: String,
-    pub kind: String,
-    pub message: Option<String>,
-}
-
-pub struct ArtifactRef {
-    pub kind: String,
-    pub path: String,
-}
-
-pub enum WindowSelector {
-    Pid { value: u32 },
-    Title { value: String },
-    TitlePattern { value: String },
-    Active,
-}
-
-pub enum TraceSource {
-    File { path: std::path::PathBuf, pattern: Option<String> },
-    EnvVar { name: String },
-    None,
-}
-
-pub struct ImportSource {
-    pub kind: String,
-    pub source: String,
-    pub dest: Option<String>,
-}
-
-pub struct CommandSpec {
-    pub program: std::path::PathBuf,
-    pub args: Vec<String>,
-    pub env: std::collections::BTreeMap<String, String>,
-    pub cwd: Option<std::path::PathBuf>,
-}
-
-pub enum LaunchStrategy {
-    ExistingWindow { selector: WindowSelector },
-    ManagedProcess { command: CommandSpec, background: bool },
-    AutonomousProcess { command: CommandSpec, background: bool },
-}
-
-pub struct PreparedRun {
-    pub strategy: LaunchStrategy,
-    pub expected_window: Option<WindowSelector>,
-    pub trace_source: TraceSource,
-    pub import_sources: Vec<ImportSource>,
-}
-```
-
-The important point is that adapters do not expose raw window-manager behavior.
-They describe what kind of run the harness should execute.
-
-## Execution Strategies
-
-The harness should support three concrete strategies.
-
-### 1. Startup-Driven
-
-Use when the app can drive itself after launch.
-
-Flow:
-
-1. adapter prepares launch command and env
-2. harness launches the process
-3. app performs its own scripted behavior
-4. harness waits for completion or timeout
-5. adapter imports artifacts and optional logs
-
-Best fit:
-
-- `gpui-component-testing`
-- `rust-chatbot` runs that can be launched directly into a target session and
-  emit traces without manual selection
-
-### 2. Interactive Window
-
-Use when the harness must manipulate a live window.
-
-Flow:
-
-1. attach to existing window or process
-2. resize, focus, send keys, optionally click
-3. capture traces and screenshots between actions
-
-Best fit:
-
-- attaching to an already-open `rust-chatbot` window
-- later generic desktop targets with no startup automation hooks
-
-### 3. Hybrid
-
-Launch the app in a known startup state, then apply a small amount of generic
-window automation.
-
-Best fit:
-
-- `rust-chatbot`: launch directly into a specific session, then resize and
-  capture
+- clap command parsing
+- target/scenario discovery commands
+- output directory setup
+- error rendering
 
 ## Scenario Model
 
-The current Python scripts hard-code some behavior that should move into a
-declarative scenario format.
-
-Suggested format: TOML.
-
-Example:
+Scenarios are config-driven.
 
 ```toml
 target = "rust_chatbot"
-scenario = "session-width-scan"
-mode = "hybrid"
+scenario = "debug"
 
 [app]
-root = "/home/m/git/rust-chatbot"
+root = "/path/to/rust-chatbot"
 provider = "codex"
-session_id = "64ee1661-b53f-4134-8855-cc2c25a06ddd"
 
 [window]
 widths = [520, 900, 1000]
 height = 900
-keep_front = false
-
-[capture]
-full_window = true
-header_crop = true
-trace_bundle = true
 ```
 
-Example for `gpui-component-testing`:
+Design expectations:
 
-```toml
-target = "gpui_component_testing"
-scenario = "scroll-matrix"
-mode = "startup-driven"
+- the scenario format should stay generic at the top level
+- app-specific config should remain nested and explicit
+- adapters validate only the scenarios they own
 
-[app]
-root = "/home/m/git/gpui-component-testing"
-example = "llm_chat_story_style_bench_demo"
+## Execution Flow
 
-[env]
-BENCH_AUTO_SCROLL = "1"
-BENCH_SCROLL_WARMUP_MS = "1500"
-BENCH_SCROLL_TICK_MS = "16"
-BENCH_SCROLL_STEP_PX = "40"
+### Interactive window flow
 
-[capture]
-import_csv = true
-import_stderr = true
-window_screenshot = false
-```
+Used primarily by `rust-chatbot`:
+
+1. Resolve target root and binaries.
+2. Resolve provider/session metadata.
+3. Launch or attach to a provider window.
+4. Resize/focus/lower as required.
+5. Capture screenshots and parse traces.
+6. Write a stable JSON report.
+
+### Startup-driven flow
+
+Used primarily by `gpui-component-testing`:
+
+1. Resolve target root and scenario binary.
+2. Launch with scenario-specific env vars.
+3. Wait for completion or artifact emission.
+4. Import emitted CSV/log/images.
+5. Write a stable JSON report.
+
+## Report Contract
+
+Every run writes an output directory containing:
+
+- `report.json`
+- screenshots or imported artifacts
+- optional crops or enhanced images
+- adapter-specific raw outputs when useful
+
+The report shape is intentionally stable at the top level and flexible under
+adapter-owned detail sections.
+
+## Extension Model
+
+Adding a new target should require:
+
+1. a new adapter crate
+2. target registration in the CLI
+3. scenario docs/examples
+4. zero or minimal changes to the X11 driver and report schema crates
 
 ## Rust-Chatbot Adapter Design
 
@@ -474,8 +324,9 @@ window_screenshot = false
 
 - Resolve the target repo root.
 - Resolve `target/release/chatbot-ctl` and `target/release/rust-chatbot`.
-- Read provider metadata from `~/.codex-desktop`, `~/.claude-desktop`, or
-  `~/.gemini-desktop`.
+- Read provider metadata from `~/.codex-desktop`, `~/.claude-desktop`,
+  `~/.gemini-desktop`, `~/.gemini-forge-desktop`, or
+  `~/.minimax-forge-desktop`.
 - Launch a session with:
   - `AUTO_UI_LAUNCH_BACKGROUND=1`
   - `RUST_CHATBOT_AUTO_UI_DEBUG=1`
@@ -483,288 +334,49 @@ window_screenshot = false
 - Parse the latest `rust-chatbot.log.*` file for:
   - `ui_auto_debug`
   - `ui_auto_debug_code_block`
-- Capture screenshots and derived crops.
+  - `ai_response_end`
+  - markdown render timing traces
 
-### Preferred mode
+### Output shape
 
-`Hybrid`.
+The adapter should emit:
 
-The adapter should avoid selecting sessions by pointer interaction when it can
-launch directly into the desired session.
+- session metadata summary
+- requested widths or prompt info
+- screenshots/crops
+- trace field maps
+- any provider session id discovered from session JSON
 
-### Special data sources
-
-- provider sessions metadata
-- provider session JSON files
-- XDG/local state trace logs
-
-## GPUI Component Testing Adapter Design
-
-### What the repo already gives us
-
-The existing scripts are not a generic automation framework, but they confirm a
-strong pattern:
-
-- launch an example binary
-- inject env vars to select behavior
-- let the app auto-run
-- wait for process exit
-- read generated artifacts
-
-That is exactly the behavior the Rust harness should model directly.
+## GPUI Adapter Design
 
 ### Required capabilities
 
 - Resolve the target repo root.
-- Resolve a prebuilt example binary or a configured launch command.
-- Inject env vars such as:
-  - `AUTO_UI_LAUNCH_BACKGROUND`
-  - `BENCH_AUTO_SCROLL`
-  - `BENCH_SCROLL_WARMUP_MS`
-  - `BENCH_SCROLL_TICK_MS`
-  - `BENCH_SCROLL_STEP_PX`
-  - `BENCH_WINDOW_TITLE`
-  - `SCROLLBAR_DEMO_*`
-  - `GPUI_COMPONENT_SCROLLBAR_TRACE`
-- Optionally import files from the artifact directory after the process exits.
-- Optionally attach to the launched window for screenshot capture when the
-  scenario requests visual output.
+- Resolve or infer the example binary path.
+- Launch with scenario-specific env vars.
+- Import app-generated artifacts without reparsing them into an unrelated shape.
 
-### Preferred mode
+## Failure Model
 
-`StartupDriven`.
+Errors should be explicit about:
 
-The adapter should not default to mouse interaction for this repo. The app
-already knows how to benchmark and trace itself more reliably than an external
-pointer script.
+- missing app roots
+- missing release binaries
+- missing session metadata
+- missing windows
+- missing logs
+- malformed scenario config
 
-### Artifact support
-
-The adapter must be able to ingest:
-
-- `.csv`
-- `.log`
-- `.md`
-- screenshots taken externally by the harness
-
-## Driver Layer
-
-The initial implementation should keep Linux support only.
-
-```rust
-pub trait WindowDriver: Send + Sync {
-    fn find_window(&self, selector: &WindowSelector) -> anyhow::Result<Option<WindowHandle>>;
-    fn resize(&self, window: &WindowHandle, width: u32, height: u32) -> anyhow::Result<WindowGeometry>;
-    fn activate(&self, window: &WindowHandle) -> anyhow::Result<()>;
-    fn lower(&self, window: &WindowHandle) -> anyhow::Result<()>;
-    fn send_keys(&self, window: &WindowHandle, keys: &[KeyChord]) -> anyhow::Result<()>;
-    fn screenshot(&self, window: &WindowHandle, path: &std::path::Path) -> anyhow::Result<()>;
-    fn geometry(&self, window: &WindowHandle) -> anyhow::Result<WindowGeometry>;
-}
-```
-
-Later backends:
-
-- AT-SPI/accessibility
-- DevTools-controlled browser targets
-- Wayland-specific drivers
-
-## Artifact Schema
-
-The report shape is now explicit and exported by the CLI with:
-
-```text
-auto-ui report-schema
-```
-
-Stable top-level shape:
-
-```json
-{
-  "schema_version": "1",
-  "tool_version": "0.1.0",
-  "target": "rust_chatbot",
-  "scenario": "session-width-scan",
-  "mode": "hybrid",
-  "app_root": "/home/m/git/rust-chatbot",
-  "run_id": "20260325-214500-abc123",
-  "artifacts": [],
-  "measurements": [],
-  "events": [],
-  "status": "ok"
-}
-```
-
-Important constraint: imported target-generated artifacts and harness-generated
-artifacts should look the same at the report layer. Adapter-specific expansion
-should stay nested under `details`, `measurements[]`, `events[]`, or artifact
-`metadata` unless it is clearly shared across targets.
-
-## CLI Design
-
-The CLI should be explicit and generic.
-
-```text
-auto-ui run --target rust_chatbot --scenario session-width-scan --config run.toml
-auto-ui run --target gpui_component_testing --scenario scroll-matrix --config run.toml
-auto-ui targets
-auto-ui scenarios --target rust_chatbot
-auto-ui report-schema
-```
-
-Suggested command structure:
-
-- `run`
-- `targets`
-- `scenarios`
-- `report-schema`
-
-## Build and Launch Policy
-
-The harness should not compile target apps by default.
-
-Reason:
-
-- build orchestration is separate from UI automation
-- some repos already have external build rules
-- startup/debug loops are faster and more predictable with prebuilt binaries
-
-Recommended model:
-
-- core assumes binaries already exist
-- adapters may optionally expose a `build_hint`
-- a later integration may call an external lightweight build service before the
-  run begins
-
-This keeps the automation system reusable across repos with different build
-pipelines.
-
-## Configuration Resolution
-
-Resolution order should be:
-
-1. CLI flag
-2. scenario file
-3. environment variable
-4. adapter default
-
-This is especially important for:
-
-- app root
-- provider
-- example name
-- artifact directory
-- timeouts
-- widths and heights
-
-## Observability
-
-The harness itself should emit structured logs.
-
-At minimum:
-
-- adapter selected
-- launch command
-- env overrides
-- discovered window ids
-- resize operations
-- trace bundle timing
-- imported artifact paths
-- timeout or retry events
-
-Rust logging stack:
-
-- `tracing`
-- `tracing-subscriber`
-- optional JSON log mode
-
-## Error Model
-
-Errors should be explicit and typed.
-
-Examples:
-
-- target root missing
-- required binary missing
-- window not found
-- trace timeout
-- artifact import missing
-- process exited early
-- report serialization failure
-
-Use `thiserror` for crate-local error types and convert to `anyhow` at the CLI
-boundary.
-
-## Migration Plan
-
-### Phase 1: Completed
-
-- create the Cargo workspace
-- implement `auto-ui-cli`, `auto-ui-core`, `auto-ui-driver-x11`
-- port the current `rust-chatbot` width scan behavior
-
-### Phase 2: Completed
-
-- implement `auto-ui-adapter-gpui`
-- support startup-driven env-based runs
-- import gpui-generated CSV/log/markdown artifacts
-
-### Phase 3: Remaining
-
-- stabilize the TOML scenario format now that scenario files exist
-- reduce or remove hard-coded default session lists from convenience commands
-- stabilize `report.json` schema
-
-### Phase 4: Remaining
-
-- add richer summaries and inspection tools
-- add alternative window drivers
-- consider packaging and crates.io publication
+The harness should fail closed rather than silently picking the wrong target.
 
 ## Test Strategy
 
-### Unit tests
+The repo should cover three layers:
 
-- trace parsing
-- config resolution
-- artifact schema serialization
-- path resolution
+1. Unit tests for config parsing, path resolution, and report shaping.
+2. Adapter tests for scenario validation and metadata parsing.
+3. Optional live smoke tests gated by env vars for real desktop sessions.
 
-### Integration tests
+## Future Work
 
-- fake adapter with deterministic outputs
-- fake window driver for orchestration logic
-- real adapter smoke tests behind ignored test flags
-
-### Golden tests
-
-- expected JSON report snapshots
-- expected imported artifact manifests
-
-## Risks
-
-- Linux desktop tooling remains brittle if the app has no startup automation
-  hooks.
-- Window-title matching can be ambiguous across multiple app instances.
-- Keeping a stable schema while supporting both imported and generated artifacts
-  will require discipline.
-- `gpui-component-testing` scenarios may differ enough that multiple sub-modes
-  are needed inside one adapter.
-
-## Open Questions
-
-- Should the initial Rust workspace be a single binary crate first, then split,
-  or start as a workspace immediately?
-- Should the CLI own scenario discovery, or should adapters expose it entirely?
-- Do we want screenshots in startup-driven gpui runs by default, or keep them
-  opt-in?
-- Should build integration remain out-of-process permanently, or become an
-  optional adapter capability later?
-
-## Recommendation
-
-The migration path described above is now in place. The best next work is:
-
-1. Stabilize the scenario and report schemas.
-2. Add smoke and golden tests for both adapters.
-3. Improve driver coverage and packaging without undoing the current adapter split.
+Follow-on items are tracked in [REMAINING.md](/home/m/git/auto-ui/REMAINING.md).

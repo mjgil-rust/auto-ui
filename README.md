@@ -48,6 +48,7 @@ repo through the same lightweight path before running the binary.
 - `header-debug`: rust-chatbot single-session header capture flow
 - `run --config <file.toml>` with `scenario = "prompt_debug"`: rust-chatbot targeted prompt + timing capture
 - `run --config <file.toml>`: generic scenario runner
+- rust-chatbot provider values: `claude`, `codex`, `gemini`, `geminiforge`, `minimaxforge`
 - `report-schema`: print the stable `report.json` JSON schema
 - `targets`: list supported targets
 - `scenarios [--target <name>]`: list supported scenarios

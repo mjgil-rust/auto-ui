@@ -21,19 +21,18 @@ impl HeadlessDisplay {
         let original_display = env::var("DISPLAY").ok();
 
         let mut xvfb = Command::new("Xvfb");
-        xvfb
-            .args([
-                &display,
-                "-screen",
-                "0",
-                geometry,
-                "-ac",
-                "-nolisten",
-                "tcp",
-            ])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
+        xvfb.args([
+            &display,
+            "-screen",
+            "0",
+            geometry,
+            "-ac",
+            "-nolisten",
+            "tcp",
+        ])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
 
         #[cfg(unix)]
         xvfb.process_group(0); // own PGID so we can kill the whole group safely
@@ -70,17 +69,15 @@ impl HeadlessDisplay {
         #[cfg(unix)]
         openbox.process_group(0); // own PGID so we can kill the whole group safely
 
-        let mut openbox = openbox
-            .spawn()
-            .map_err(|e| {
-                // Clean up started Xvfb before returning error
-                let _ = xvfb.kill();
-                let _ = xvfb.wait();
-                anyhow::anyhow!(
-                    "failed to start openbox (apt install openbox): {e}. \
+        let mut openbox = openbox.spawn().map_err(|e| {
+            // Clean up started Xvfb before returning error
+            let _ = xvfb.kill();
+            let _ = xvfb.wait();
+            anyhow::anyhow!(
+                "failed to start openbox (apt install openbox): {e}. \
                      wmctrl requires an EWMH-compliant window manager on Xvfb."
-                )
-            })?;
+            )
+        })?;
         thread::sleep(Duration::from_millis(300));
 
         eprintln!(
@@ -296,7 +293,9 @@ mod tests {
         let display = hd.display();
         assert!(display.starts_with(':'), "display must start with ':'");
         let num_str = &display[1..];
-        num_str.parse::<u32>().expect("display number must be parseable as u32");
+        num_str
+            .parse::<u32>()
+            .expect("display number must be parseable as u32");
     }
 
     #[test]
@@ -339,13 +338,16 @@ mod tests {
     #[ignore = "requires Xvfb and openbox installed"]
     fn headless_display_multiple_concurrent_displays() {
         // Should be able to start multiple HeadlessDisplays (may be sequential if displays are contended)
-        let hd1 = HeadlessDisplay::start("800x600x24").expect("first headless display should start");
+        let hd1 =
+            HeadlessDisplay::start("800x600x24").expect("first headless display should start");
         let d1 = hd1.display().to_string();
 
-        let hd2 = HeadlessDisplay::start("800x600x24").expect("second headless display should start");
+        let hd2 =
+            HeadlessDisplay::start("800x600x24").expect("second headless display should start");
         let d2 = hd2.display().to_string();
 
-        let hd3 = HeadlessDisplay::start("800x600x24").expect("third headless display should start");
+        let hd3 =
+            HeadlessDisplay::start("800x600x24").expect("third headless display should start");
         let d3 = hd3.display().to_string();
 
         // At least two should be unique (best-effort under contention)
@@ -379,7 +381,9 @@ mod tests {
         // Display number should be in the expected range (80-99)
         let hd = HeadlessDisplay::start("800x600x24").expect("headless display should start");
         let display = hd.display();
-        let num: u32 = display[1..].parse().expect("display must be parseable as u32");
+        let num: u32 = display[1..]
+            .parse()
+            .expect("display must be parseable as u32");
         assert!(
             (80..=99).contains(&num),
             "display number {num} should be in range 80-99"
@@ -566,7 +570,10 @@ mod tests {
             .stderr(Stdio::null())
             .status()
             .expect("kill -0 should succeed for running process");
-        assert!(status.success(), "openbox process {openbox_pid} should be running");
+        assert!(
+            status.success(),
+            "openbox process {openbox_pid} should be running"
+        );
         drop(hd);
     }
 
@@ -579,8 +586,8 @@ mod tests {
 
         // Read /proc/{pid}/comm to verify it's openbox
         let comm_path = format!("/proc/{}/comm", openbox_pid);
-        let comm = std::fs::read_to_string(&comm_path)
-            .expect("should be able to read openbox comm");
+        let comm =
+            std::fs::read_to_string(&comm_path).expect("should be able to read openbox comm");
         let comm = comm.trim();
         assert!(
             comm == "openbox" || comm.contains("openbox"),
@@ -621,7 +628,10 @@ mod tests {
                 .stderr(Stdio::null())
                 .status()
                 .expect("kill -0 should succeed");
-            assert!(status.success(), "openbox should remain alive during operation");
+            assert!(
+                status.success(),
+                "openbox should remain alive during operation"
+            );
             thread::sleep(Duration::from_millis(100));
         }
         drop(hd);
@@ -766,7 +776,10 @@ mod tests {
         }
 
         // Process should be gone
-        assert!(exited, "openbox process {openbox_pid} should not exist after drop");
+        assert!(
+            exited,
+            "openbox process {openbox_pid} should not exist after drop"
+        );
 
         // And not a zombie (zombie would still show in ps)
         let output = Command::new("ps")
@@ -774,7 +787,9 @@ mod tests {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .output();
-        let stat = String::from_utf8_lossy(&output.unwrap().stdout).trim().to_string();
+        let stat = String::from_utf8_lossy(&output.unwrap().stdout)
+            .trim()
+            .to_string();
         // If ps succeeded, the process still exists as a zombie
         assert!(
             stat != "Z",
@@ -791,7 +806,10 @@ mod tests {
                 "headless display should start with geometry {geometry}"
             ));
             let openbox_pid = hd.openbox.id();
-            assert!(openbox_pid > 0, "openbox pid should be non-zero for {geometry}");
+            assert!(
+                openbox_pid > 0,
+                "openbox pid should be non-zero for {geometry}"
+            );
 
             // Verify openbox is still alive
             let status = Command::new("kill")
@@ -801,7 +819,10 @@ mod tests {
                 .stderr(Stdio::null())
                 .status()
                 .expect("kill -0 should succeed");
-            assert!(status.success(), "openbox should be alive for geometry {geometry}");
+            assert!(
+                status.success(),
+                "openbox should be alive for geometry {geometry}"
+            );
             drop(hd);
             thread::sleep(Duration::from_millis(100));
         }

@@ -113,11 +113,17 @@ pub fn print_scenarios(target: Option<&str>) {
         }
         None => {
             println!("Available scenarios:");
-            println!("  rust_chatbot ({} scenarios)", rust_chatbot::scenario_names().len());
+            println!(
+                "  rust_chatbot ({} scenarios)",
+                rust_chatbot::scenario_names().len()
+            );
             for scenario in rust_chatbot::scenario_names() {
                 println!("    {scenario}");
             }
-            println!("  gpui_component_testing ({} scenarios)", gpui::scenario_names().len());
+            println!(
+                "  gpui_component_testing ({} scenarios)",
+                gpui::scenario_names().len()
+            );
             for scenario in gpui::scenario_names() {
                 println!("    {scenario}");
             }

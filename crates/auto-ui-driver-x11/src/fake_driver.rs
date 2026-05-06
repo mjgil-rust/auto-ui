@@ -8,8 +8,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use super::WindowGeometry;
 use super::window_driver_trait::WindowDriver;
+use super::WindowGeometry;
 
 /// A fake window ID for testing.
 pub const FAKE_WINDOW_ID: &str = "0xFAKE123";
@@ -85,23 +85,11 @@ impl FakeWindowDriver {
 
 impl WindowDriver for FakeWindowDriver {
     fn find_windows(&self, _title: &str) -> anyhow::Result<Vec<String>> {
-        Ok(self
-            .state
-            .lock()
-            .unwrap()
-            .keys()
-            .cloned()
-            .collect())
+        Ok(self.state.lock().unwrap().keys().cloned().collect())
     }
 
     fn find_windows_for_pid(&self, _pid: i32) -> anyhow::Result<Vec<String>> {
-        Ok(self
-            .state
-            .lock()
-            .unwrap()
-            .keys()
-            .cloned()
-            .collect())
+        Ok(self.state.lock().unwrap().keys().cloned().collect())
     }
 
     fn get_geometry(&self, window_id: &str) -> anyhow::Result<WindowGeometry> {
@@ -150,10 +138,7 @@ impl WindowDriver for FakeWindowDriver {
 
     fn get_active_window(&self) -> anyhow::Result<Option<String>> {
         let state = self.state.lock().unwrap();
-        Ok(state
-            .iter()
-            .find(|(_, v)| v.active)
-            .map(|(k, _)| k.clone()))
+        Ok(state.iter().find(|(_, v)| v.active).map(|(k, _)| k.clone()))
     }
 }
 
