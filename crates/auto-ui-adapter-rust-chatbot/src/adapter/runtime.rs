@@ -307,6 +307,7 @@ fn launch_window(
         cmd.arg("--instance").arg(instance.to_string());
     }
     cmd.env("RUST_CHATBOT_AUTO_UI_DEBUG", "1");
+    cmd.env("RUST_CHATBOT_SKIP_BACKUP_SCHEDULER_PREFLIGHT", "1");
     request_background_launch(&mut cmd);
     if let Some(session_id) = start_session_id {
         cmd.env("RUST_CHATBOT_START_SESSION_ID", session_id);

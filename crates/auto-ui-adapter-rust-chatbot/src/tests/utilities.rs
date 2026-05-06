@@ -177,45 +177,54 @@ fn load_sessions_returns_empty_when_no_sessions_exist() {
 
 #[test]
 fn launch_window_sets_correct_env_vars() {
-    // launch_window should set RUST_CHATBOT_AUTO_UI_DEBUG=1 and
-    // AUTO_UI_LAUNCH_BACKGROUND=1 via request_background_launch
     let temp = unique_temp_dir("launch-env-test");
     let data_dir = temp.join(".claude-desktop");
     fs::create_dir_all(&data_dir).unwrap();
     let bin_dir = temp.join("target").join("release");
     fs::create_dir_all(&bin_dir).unwrap();
     let chatbot_ctl_path = bin_dir.join("chatbot-ctl");
-    fs::write(&chatbot_ctl_path, "#!/bin/sh\nwhile read line; do :; done").unwrap();
+    let rust_chatbot_path = bin_dir.join("rust-chatbot");
+    let output_file = temp.join("env_output.txt");
+    unsafe {
+        std::env::set_var("AUTO_UI_TEST_CAPTURE_PATH", &output_file);
+    }
+    fs::write(
+        &chatbot_ctl_path,
+        r#"#!/bin/sh
+echo "AUTO_UI_LAUNCH_BACKGROUND=$AUTO_UI_LAUNCH_BACKGROUND" >> "$AUTO_UI_TEST_CAPTURE_PATH"
+echo "RUST_CHATBOT_AUTO_UI_DEBUG=$RUST_CHATBOT_AUTO_UI_DEBUG" >> "$AUTO_UI_TEST_CAPTURE_PATH"
+echo "RUST_CHATBOT_SKIP_BACKUP_SCHEDULER_PREFLIGHT=$RUST_CHATBOT_SKIP_BACKUP_SCHEDULER_PREFLIGHT" >> "$AUTO_UI_TEST_CAPTURE_PATH"
+echo "RUST_CHATBOT_START_SESSION_ID=$RUST_CHATBOT_START_SESSION_ID" >> "$AUTO_UI_TEST_CAPTURE_PATH"
+printf '%s\n' "$@" >> "$AUTO_UI_TEST_CAPTURE_PATH"
+exit 0
+"#,
+    )
+    .unwrap();
+    fs::write(&rust_chatbot_path, "#!/bin/sh\nexit 0\n").unwrap();
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&chatbot_ctl_path, fs::Permissions::from_mode(0o755)).unwrap();
+        fs::set_permissions(&rust_chatbot_path, fs::Permissions::from_mode(0o755)).unwrap();
     }
 
-    // Capture the environment and args passed to chatbot-ctl
-    let capture_script = bin_dir.join("capture-env.sh");
-    fs::write(
-        &capture_script,
-        r#"#!/bin/sh
-echo "PROVIDER=$1" >> "$2"
-echo "AUTO_UI_LAUNCH_BACKGROUND=$AUTO_UI_LAUNCH_BACKGROUND" >> "$2"
-echo "RUST_CHATBOT_AUTO_UI_DEBUG=$RUST_CHATBOT_AUTO_UI_DEBUG" >> "$2"
-echo "RUST_CHATBOT_START_SESSION_ID=$RUST_CHATBOT_START_SESSION_ID" >> "$2"
-"#,
-    )
-    .unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&capture_script, fs::Permissions::from_mode(0o755)).unwrap();
-    }
+    let result = launch_window(&temp, Provider::Claude, Some(7), Some("test-session-123"));
+    assert!(result.is_ok());
 
-    let _output_file = temp.join("env_output.txt");
-    let result = launch_window(&temp, Provider::Claude, None, None);
-    // The actual launch won't succeed (fake binary doesn't properly daemonize),
-    // but we can verify it tried to set up env vars by checking logs
-    // This test verifies the env vars are set on the command object before execution
-    assert!(result.is_err() || result.is_ok()); // Just ensure no panic
+    let captured = fs::read_to_string(&output_file).unwrap();
+    assert!(captured.contains("AUTO_UI_LAUNCH_BACKGROUND=1"));
+    assert!(captured.contains("RUST_CHATBOT_AUTO_UI_DEBUG=1"));
+    assert!(captured.contains("RUST_CHATBOT_SKIP_BACKUP_SCHEDULER_PREFLIGHT=1"));
+    assert!(captured.contains("RUST_CHATBOT_START_SESSION_ID=test-session-123"));
+    assert!(captured.contains("launch"));
+    assert!(captured.contains("--provider"));
+    assert!(captured.contains("claude"));
+    assert!(captured.contains("--instance"));
+    assert!(captured.contains("7"));
+
+    unsafe {
+        std::env::remove_var("AUTO_UI_TEST_CAPTURE_PATH");
+    }
     std::fs::remove_dir_all(temp).ok();
 }
 
