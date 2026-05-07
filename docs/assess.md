@@ -52,6 +52,8 @@ Several adapters write a report on failure, but they do not call `report.finish_
 
 **Fix:** In every `if result.is_err()` block, call `report.finish_error(format!("{:#}", result.as_ref().unwrap_err()))` before writing. Then test this for each scenario path.
 
+**Status: FIXED** — All 6 error paths (rust-chatbot: debug, header_debug, prompt_debug; GPUI: scroll_matrix, scrollbar_trace, conversation_paint) now call `report.finish_error()` before `write_report()`.
+
 ### 5. `rust-chatbot` trace matching likely misses quoted `session_id`s
 
 The trace parser supports quoted values, and tests include quoted `session_id="..."` cases. But `wait_for_trace_bundle()` filters `ui_auto_debug` lines with `line.contains(&format!("session_id={session_id}"))`, which only matches unquoted IDs. It does handle code-block rows via `extract_session_id_from_line`, but not the primary `ui_auto_debug` row. 
