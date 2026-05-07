@@ -72,6 +72,8 @@ The trace parser supports quoted values, and tests include quoted `session_id=".
 
 **Fix:** Remove `#[cfg(test)]`, call `newest_trace_log_since(launch_start_time)` after launching, and update offsets against the selected file. Keep a fallback only if no newer log is found.
 
+**Status: FIXED** — Removed `#[cfg(test)]` from `newest_trace_log_since()`. Updated debug.rs, header_debug.rs, and prompt_debug.rs to capture `launch_start_time` before launch and check for newer logs after launch completes.
+
 ### 7. GPUI process output handling can deadlock and then writes empty logs
 
 `run_process_with_optional_capture()` sets stdout/stderr to `Stdio::piped()`, but in the normal non-timeout path it calls `child.wait()` rather than `wait_with_output()` or concurrently draining the pipes. Afterward it writes empty stdout/stderr log files. The docs claim GPUI runs write stdout/stderr artifacts. 
