@@ -658,10 +658,14 @@ fn wait_for_trace_bundle(
                 }
                 continue;
             }
-            if line.contains("ui_auto_debug") && line.contains(&format!("session_id={session_id}"))
-            {
-                last_ui_match = Some(parse_trace_fields(&line));
-                saw_new_relevant_line = true;
+            if line.contains("ui_auto_debug") {
+                // Use extract_session_id_from_line to handle both quoted and unquoted session_id
+                if let Some(line_session_id) = extract_session_id_from_line(&line) {
+                    if line_session_id == session_id {
+                        last_ui_match = Some(parse_trace_fields(&line));
+                        saw_new_relevant_line = true;
+                    }
+                }
             }
         }
 
