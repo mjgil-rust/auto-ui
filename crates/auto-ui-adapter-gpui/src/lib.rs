@@ -1058,12 +1058,26 @@ fn run_process_with_optional_capture(
     }
 
     // Wait for process with optional timeout
+    let timed_out: bool;
     let exit_status = if let Some(timeout) = timeout_ms {
         let start = std::time::Instant::now();
         let timeout_duration = Duration::from_millis(timeout);
         loop {
             match child.try_wait() {
-                Ok(Some(status)) => break status,
+                Ok(Some(status)) => {
+                    // Process exited normally - capture output via wait_with_output()
+                    // Note: try_wait reaps the process but we need to call wait_with_output
+                    // to get the output from the pipes
+                    let output = child.wait_with_output().with_context(|| {
+                        "failed to capture output after process exited"
+                    })?;
+                    fs::write(stdout_path, &output.stdout)
+                        .with_context(|| format!("failed to write {}", stdout_path.display()))?;
+                    fs::write(stderr_path, &output.stderr)
+                        .with_context(|| format!("failed to write {}", stderr_path.display()))?;
+                    timed_out = false;
+                    break output.status;
+                }
                 Ok(None) => {
                     if start.elapsed() >= timeout_duration {
                         // Kill and capture output before bailing
@@ -1077,6 +1091,7 @@ fn run_process_with_optional_capture(
                                 format!("failed to write {}", stderr_path.display())
                             })?;
                         }
+                        timed_out = true;
                         bail!("process timed out after {}ms", timeout);
                     }
                     thread::sleep(Duration::from_millis(50));
@@ -1085,14 +1100,19 @@ fn run_process_with_optional_capture(
             }
         }
     } else {
-        child.wait().context("failed to wait for gpui process")?
+        // Use wait_with_output() instead of wait() to avoid deadlock when
+        // stdout/stderr pipes fill up. Also captures output for logging.
+        let output = child
+            .wait_with_output()
+            .context("failed to wait for gpui process")?;
+        fs::write(stdout_path, &output.stdout)
+            .with_context(|| format!("failed to write {}", stdout_path.display()))?;
+        fs::write(stderr_path, &output.stderr)
+            .with_context(|| format!("failed to write {}", stderr_path.display()))?;
+        timed_out = false;
+        output.status
     };
 
-    // Write empty logs - actual output is captured by caller via stdout/stderr pipes when needed
-    fs::write(stdout_path, b"")
-        .with_context(|| format!("failed to write {}", stdout_path.display()))?;
-    fs::write(stderr_path, b"")
-        .with_context(|| format!("failed to write {}", stderr_path.display()))?;
     if !exit_status.success() {
         bail!(
             "gpui process failed with status {}. stderr log: {}",
