@@ -282,7 +282,8 @@ pub fn run_debug(config: DebugConfig) -> Result<CompletedRun> {
     let title = provider_title(config.provider, &app_root);
     let output_dir = build_output_dir(config.output_dir.as_deref(), "auto-ui-debug")?;
     let progress_path = output_dir.join("progress.log");
-    let log_path = newest_trace_log()?;
+    let launch_start_time = std::time::SystemTime::now();
+    let mut log_path = newest_trace_log()?;
     let mut log_offset = fs::metadata(&log_path)?.len();
 
     log_line(
@@ -408,6 +409,23 @@ pub fn run_debug(config: DebugConfig) -> Result<CompletedRun> {
             ),
             Some(&progress_path),
         )?;
+    }
+
+    // Check if a new log file was created after launch (log rotation)
+    // If so, switch to the new log with offset 0
+    if let Ok(new_log_path) = newest_trace_log_since(launch_start_time) {
+        if new_log_path != log_path {
+            log_line(
+                format!(
+                    "log rotation detected: switching from {} to {}",
+                    log_path.display(),
+                    new_log_path.display()
+                ),
+                Some(&progress_path),
+            )?;
+            log_path = new_log_path;
+            log_offset = 0;
+        }
     }
 
     let mut report_sessions = Vec::new();

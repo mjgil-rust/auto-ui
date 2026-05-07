@@ -18,8 +18,9 @@ pub fn run_header_debug(config: HeaderDebugConfig) -> Result<CompletedRun> {
     let title = provider_title(config.provider, &app_root);
     let output_dir = build_output_dir(config.output_dir.as_deref(), "auto-ui-header-debug")?;
     let progress_path = output_dir.join("progress.log");
-    let log_path = newest_trace_log()?;
-    let startup_offset = fs::metadata(&log_path)?.len();
+    let launch_start_time = std::time::SystemTime::now();
+    let mut log_path = newest_trace_log()?;
+    let mut startup_offset = fs::metadata(&log_path)?.len();
 
     log_line(
         format!("app_root={}", app_root.display()),
@@ -91,6 +92,23 @@ pub fn run_header_debug(config: HeaderDebugConfig) -> Result<CompletedRun> {
             desktop_window_id.as_deref(),
         )?;
         launched_pid = Some(new_pid);
+
+        // Check if a new log file was created after launch (log rotation)
+        // If so, switch to the new log with offset 0
+        if let Ok(new_log_path) = newest_trace_log_since(launch_start_time) {
+            if new_log_path != log_path {
+                log_line(
+                    format!(
+                        "log rotation detected: switching from {} to {}",
+                        log_path.display(),
+                        new_log_path.display()
+                    ),
+                    Some(&progress_path),
+                )?;
+                log_path = new_log_path;
+                startup_offset = 0;
+            }
+        }
 
         let (mut current_offset, startup_trace, startup_code_blocks) = wait_for_trace_bundle(
             &log_path,

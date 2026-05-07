@@ -14,7 +14,8 @@ pub fn run_prompt_debug(config: PromptDebugConfig) -> Result<CompletedRun> {
     let title = provider_title(config.provider, &app_root);
     let output_dir = build_output_dir(config.output_dir.as_deref(), "auto-ui-prompt-debug")?;
     let progress_path = output_dir.join("progress.log");
-    let log_path = newest_trace_log()?;
+    let launch_start_time = std::time::SystemTime::now();
+    let mut log_path = newest_trace_log()?;
 
     log_line(
         format!("app_root={}", app_root.display()),
@@ -55,6 +56,22 @@ pub fn run_prompt_debug(config: PromptDebugConfig) -> Result<CompletedRun> {
             desktop_window_id.as_deref(),
         )?;
         launched_pid = Some(new_pid);
+
+        // Check if a new log file was created after launch (log rotation)
+        // If so, switch to the new log
+        if let Ok(new_log_path) = newest_trace_log_since(launch_start_time) {
+            if new_log_path != log_path {
+                log_line(
+                    format!(
+                        "log rotation detected: switching from {} to {}",
+                        log_path.display(),
+                        new_log_path.display()
+                    ),
+                    Some(&progress_path),
+                )?;
+                log_path = new_log_path;
+            }
+        }
 
         if config.keep_front {
             x11::resize_window(&window_id, config.width, config.height)?;
