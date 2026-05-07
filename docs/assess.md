@@ -92,6 +92,8 @@ The trace parser supports quoted values, and tests include quoted `session_id=".
 
 **Fix:** Redact both `KEY=value` patterns and known secret values from the environment. Add tests for `OPENAI_API_KEY=sk-secret`, `--api-key sk-secret`, and token-looking values.
 
+**Status: FIXED** — `format_safe_error` now replaces `KEY=VALUE` (value until whitespace) with `KEY=[REDACTED]`, fully redacting the secret. Added tests for API keys, session tokens, and multiple secrets.
+
 ## Medium-priority issues
 
 Scenario validation is inconsistent. `debug` rejects empty widths, but `header_debug` accepts empty widths at validation time and only fails during execution. `prompt_debug` validates successfully with empty `session_id` and empty prompt, even though `run_prompt_debug()` rejects both.
