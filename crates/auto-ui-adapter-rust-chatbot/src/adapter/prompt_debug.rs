@@ -149,6 +149,8 @@ pub fn run_prompt_debug(config: PromptDebugConfig) -> Result<CompletedRun> {
 
     // Write report on failure (success path writes it inside the closure)
     if result.is_err() {
+        let err_msg = result.as_ref().unwrap_err().to_string();
+        report.finish_error(&err_msg);
         if let Err(err) = write_report(&output_dir_for_error_report, &report) {
             let _ = log_line(
                 format!("warning: failed to write error report: {err:#}"),
