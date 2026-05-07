@@ -62,6 +62,8 @@ The trace parser supports quoted values, and tests include quoted `session_id=".
 
 **Fix:** In `wait_for_trace_bundle`, parse/extract `session_id` first, as the code-block path already does, then compare the parsed value. Add a regression test with a quoted `ui_auto_debug session_id="s1"` line.
 
+**Status: FIXED** — `wait_for_trace_bundle` now uses `extract_session_id_from_line()` for ui_auto_debug lines, handling both quoted and unquoted session_id formats.
+
 ### 6. Stale log handling is documented but not actually used
 
 `docs/troubleshooting.md` says the tool now uses `newest_trace_log_since()` for stale log avoidance, but that function is behind `#[cfg(test)]`; runtime paths call `newest_trace_log()` before launch and record that log path. 
