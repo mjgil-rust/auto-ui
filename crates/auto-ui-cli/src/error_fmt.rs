@@ -53,8 +53,28 @@ pub fn format_safe_error(error: &str) -> String {
 
     for (key, value) in redacted.iter() {
         if value == "[REDACTED]" {
-            // Redacted env var - replace any occurrence of the key with placeholder
-            safe_error = safe_error.replace(key, &format!("{}=[REDACTED]", key));
+            // Replace KEY=VALUE pattern with KEY=[REDACTED] to fully redact the secret
+            // Find the pattern KEY= and replace up to the next whitespace or end of string
+            let key_pattern = format!("{}=", key);
+            let mut start = 0;
+            while let Some(pos) = safe_error[start..].find(&key_pattern) {
+                let abs_pos = start + pos;
+                // Find end of value (next whitespace or end of string)
+                let value_start = abs_pos + key_pattern.len();
+                let value_end = safe_error[value_start..]
+                    .find(|c: char| c.is_whitespace())
+                    .map(|i| value_start + i)
+                    .unwrap_or(safe_error.len());
+                // Replace KEY=VALUE with KEY=[REDACTED]
+                safe_error = format!(
+                    "{}{}=[REDACTED]{}",
+                    &safe_error[..abs_pos],
+                    key,
+                    &safe_error[value_end..]
+                );
+                // Move past this replacement to avoid infinite loop
+                start = abs_pos + key.len() + "[REDACTED]".len();
+            }
         }
     }
 
@@ -85,5 +105,79 @@ mod tests {
         // Should not panic even with unusual characters
         let result = format_safe_error("test error with special chars: <>&\"'");
         assert!(result.contains("test error"));
+    }
+
+    #[test]
+    fn format_safe_error_redacts_api_key_in_message() {
+        // Set a sensitive env var for this test
+        std::env::set_var("OPENAI_API_KEY", "sk-test-secret123");
+        let result = format_safe_error("Failed: OPENAI_API_KEY=sk-test-secret123 is invalid");
+        std::env::remove_var("OPENAI_API_KEY");
+
+        assert!(
+            result.contains("OPENAI_API_KEY=[REDACTED]"),
+            "should redact the API key value, got: {}",
+            result
+        );
+        assert!(
+            !result.contains("sk-test-secret123"),
+            "should not contain the secret value, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn format_safe_error_redacts_multiple_api_keys() {
+        std::env::set_var("OPENAI_API_KEY", "sk-secret1");
+        std::env::set_var("ANTHROPIC_API_KEY", "sk-ant-secret2");
+        let result = format_safe_error(
+            "Auth failed: OPENAI_API_KEY=sk-secret1 and ANTHROPIC_API_KEY=sk-ant-secret2",
+        );
+        std::env::remove_var("OPENAI_API_KEY");
+        std::env::remove_var("ANTHROPIC_API_KEY");
+
+        assert!(
+            !result.contains("sk-secret1") && !result.contains("sk-ant-secret2"),
+            "should redact both secrets, got: {}",
+            result
+        );
+        assert!(
+            result.contains("OPENAI_API_KEY=[REDACTED]")
+                && result.contains("ANTHROPIC_API_KEY=[REDACTED]"),
+            "should contain redaction markers, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn format_safe_error_handles_token_in_error() {
+        std::env::set_var("SESSION_TOKEN", "tok_session_abc123xyz");
+        let result = format_safe_error("Token error: SESSION_TOKEN=tok_session_abc123xyz expired");
+        std::env::remove_var("SESSION_TOKEN");
+
+        assert!(
+            !result.contains("tok_session_abc123xyz"),
+            "should not contain token value, got: {}",
+            result
+        );
+        assert!(
+            result.contains("SESSION_TOKEN=[REDACTED]"),
+            "should contain redaction marker, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn format_safe_error_preserves_non_sensitive_content() {
+        std::env::set_var("OPENAI_API_KEY", "sk-secret");
+        let result = format_safe_error("Error code: 123, message: something went wrong");
+        std::env::remove_var("OPENAI_API_KEY");
+
+        // Should preserve the non-sensitive parts
+        assert!(result.contains("Error code: 123"), "should preserve error code");
+        assert!(
+            result.contains("message: something went wrong"),
+            "should preserve error message"
+        );
     }
 }
