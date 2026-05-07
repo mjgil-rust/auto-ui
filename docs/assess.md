@@ -82,6 +82,8 @@ The trace parser supports quoted values, and tests include quoted `session_id=".
 
 **Fix:** Use `wait_with_output()` for normal runs, or spawn reader threads while polling for timeouts. Always write captured output to the artifact paths.
 
+**Status: FIXED** — Both timeout and non-timeout cases now call `wait_with_output()` to properly capture stdout/stderr and write to artifact files. When process exits normally in timeout mode, output is captured via `wait_with_output()` before breaking from the loop.
+
 ### 8. Error redaction is not safe enough
 
 `format_safe_error()` iterates redacted env keys and replaces the key name with `KEY=[REDACTED]`, but it does not replace the actual secret value. For an error containing `OPENAI_API_KEY=sk-...`, this can still leave the secret in the message after the replacement. 
