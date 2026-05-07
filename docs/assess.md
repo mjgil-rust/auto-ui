@@ -42,6 +42,8 @@ The CI installs Rust and runs `cargo test --workspace`, but the workflow does no
 
 **Fix:** Add `source` to the schema properties with enum `["generated", "imported"]`; decide whether it is optional or required. Add a real JSON-schema validation test for a report produced by `Report::new().add_artifact()`.
 
+**Status: FIXED** — `source` field added to schema with enum `["generated", "imported"]`. Added `artifact_ref_schema_includes_source_field` regression test. Also fixed missing `#[test]` on `error_report_conforms_to_schema` function.
+
 ### 4. Failure reports are written as `running`, not `error`
 
 Several adapters write a report on failure, but they do not call `report.finish_error(...)` before `write_report(...)`. In `rust-chatbot` debug and all three GPUI scenarios, the failure path simply writes the partially initialized report. 
