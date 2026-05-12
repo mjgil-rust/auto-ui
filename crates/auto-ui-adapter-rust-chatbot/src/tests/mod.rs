@@ -38,6 +38,7 @@ fn provider_from_env() -> Provider {
         "claude" => Provider::Claude,
         "codex" => Provider::Codex,
         "gemini" => Provider::Gemini,
+        "kimi" => Provider::Kimi,
         "geminiforge" | "gemini-forge" | "gemini_forge" => Provider::GeminiForge,
         "geminicliforge" | "gemini-cli-forge" | "gemini_cli_forge" => Provider::GeminiCliForge,
         "minimaxforge" | "minimax-forge" | "minimax_forge" => Provider::MiniMaxForge,
@@ -97,6 +98,11 @@ fn forge_providers_map_to_rust_chatbot_metadata() {
         Provider::OmniForge.provider_session_field(),
         "omniforge_session_id"
     );
+
+    assert_eq!(Provider::Kimi.as_str(), "kimi");
+    assert_eq!(Provider::Kimi.title_base(), "Kimi Rust Chatbot");
+    assert_eq!(Provider::Kimi.data_dir_name(), ".kimi-desktop");
+    assert_eq!(Provider::Kimi.provider_session_field(), "kimi_session_id");
 }
 
 #[test]
