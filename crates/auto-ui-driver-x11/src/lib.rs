@@ -456,7 +456,9 @@ fn is_executable(path: &std::path::Path) -> bool {
 
 #[cfg(not(unix))]
 fn is_executable(path: &std::path::Path) -> bool {
-    std::fs::metadata(path).map(|m| m.is_file()).unwrap_or(false)
+    std::fs::metadata(path)
+        .map(|m| m.is_file())
+        .unwrap_or(false)
 }
 
 fn wait_for_option<T, F>(timeout: Duration, mut f: F) -> Result<Option<T>>
@@ -506,8 +508,8 @@ mod tests {
                 0x90, 0x77, 0x53, 0xDE, // IHDR CRC
                 0x00, 0x00, 0x00, 0x0C, // IDAT chunk length
                 0x49, 0x44, 0x41, 0x54, // IDAT type
-                0x08, 0xD7, 0x63, 0xF8, 0x0F, 0x00, 0x00, 0x01, 0x01, 0x00, 0x05, 0xFE,
-                0x02, 0xFE, // IDAT data + CRC
+                0x08, 0xD7, 0x63, 0xF8, 0x0F, 0x00, 0x00, 0x01, 0x01, 0x00, 0x05, 0xFE, 0x02,
+                0xFE, // IDAT data + CRC
                 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, // IEND chunk
                 0xAE, 0x42, 0x60, 0x82, // IEND CRC
             ],
@@ -598,7 +600,9 @@ mod tests {
 
     #[test]
     fn is_executable_returns_false_for_nonexistent() {
-        assert!(!is_executable(std::path::Path::new("/nonexistent/path/xyz")));
+        assert!(!is_executable(std::path::Path::new(
+            "/nonexistent/path/xyz"
+        )));
     }
 
     #[test]

@@ -1068,9 +1068,9 @@ fn run_process_with_optional_capture(
                     // Process exited normally - capture output via wait_with_output()
                     // Note: try_wait reaps the process but we need to call wait_with_output
                     // to get the output from the pipes
-                    let output = child.wait_with_output().with_context(|| {
-                        "failed to capture output after process exited"
-                    })?;
+                    let output = child
+                        .wait_with_output()
+                        .with_context(|| "failed to capture output after process exited")?;
                     fs::write(stdout_path, &output.stdout)
                         .with_context(|| format!("failed to write {}", stdout_path.display()))?;
                     fs::write(stderr_path, &output.stderr)

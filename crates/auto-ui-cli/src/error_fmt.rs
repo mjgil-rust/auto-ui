@@ -174,7 +174,10 @@ mod tests {
         std::env::remove_var("OPENAI_API_KEY");
 
         // Should preserve the non-sensitive parts
-        assert!(result.contains("Error code: 123"), "should preserve error code");
+        assert!(
+            result.contains("Error code: 123"),
+            "should preserve error code"
+        );
         assert!(
             result.contains("message: something went wrong"),
             "should preserve error message"
