@@ -225,6 +225,16 @@ impl WindowDriver for FakeWindowDriver {
     fn image_size(&self, _image_path: &Path) -> anyhow::Result<(i32, i32)> {
         Ok((800, 600))
     }
+
+    fn prepare_window_for_capture(
+        &self,
+        window_id: &str,
+        width: u32,
+        height: u32,
+        _restore_window_id: Option<&str>,
+    ) -> anyhow::Result<WindowGeometry> {
+        self.resize(window_id, width, height)
+    }
 }
 
 #[cfg(test)]

@@ -49,7 +49,8 @@ pub struct Args {
 }
 
 pub fn run(args: Args) -> Result<()> {
-    run_debug(DebugConfig {
+    let driver = crate::build_driver()?;
+    run_debug(&*driver, DebugConfig {
         app_root: args.app_root,
         provider: args.provider,
         instance: args.instance,

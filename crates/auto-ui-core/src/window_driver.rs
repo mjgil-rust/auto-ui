@@ -110,6 +110,15 @@ pub trait WindowDriver: Send + Sync {
 
     /// Get the dimensions of an image.
     fn image_size(&self, image_path: &Path) -> Result<(i32, i32)>;
+
+    /// Resize a window and move it to the background for capture.
+    fn prepare_window_for_capture(
+        &self,
+        window_id: &str,
+        width: u32,
+        height: u32,
+        restore_window_id: Option<&str>,
+    ) -> Result<WindowGeometry>;
 }
 
 /// Default heuristic for whether text is visible in a cropped region.

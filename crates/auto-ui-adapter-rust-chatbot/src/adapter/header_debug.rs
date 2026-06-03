@@ -1,4 +1,4 @@
-pub fn run_header_debug(config: HeaderDebugConfig) -> Result<CompletedRun> {
+pub fn run_header_debug(driver: &dyn WindowDriver, config: HeaderDebugConfig) -> Result<CompletedRun> {
     auto_ui_core::ensure_display("Rust Chatbot")?;
 
     let widths = parse_widths(&config.widths)?;
@@ -8,7 +8,7 @@ pub fn run_header_debug(config: HeaderDebugConfig) -> Result<CompletedRun> {
 
     let app_root = resolve_app_root(config.app_root.as_deref())?;
     require_release_binaries(&app_root, &["chatbot-ctl", "rust-chatbot"])?;
-    let desktop_window_id = x11::get_active_window_id()?;
+    let desktop_window_id = driver.get_active_window()?;
     let session = resolve_session(
         config.provider,
         config.session_id.as_deref(),
@@ -81,6 +81,7 @@ pub fn run_header_debug(config: HeaderDebugConfig) -> Result<CompletedRun> {
     let output_dir_for_error_report = output_dir.clone();
     let result = (|| -> Result<CompletedRun> {
         let (new_pid, window_id) = launch_targeted_session_window(
+            driver,
             &app_root,
             config.provider,
             config.instance,
@@ -140,9 +141,9 @@ pub fn run_header_debug(config: HeaderDebugConfig) -> Result<CompletedRun> {
                 Some(&progress_path),
             )?;
             let geometry = if config.keep_front {
-                x11::resize_window(&window_id, width, config.height)?
+                driver.resize(&window_id, width, config.height)?
             } else {
-                x11::prepare_window_for_capture(
+                driver.prepare_window_for_capture(
                     &window_id,
                     width,
                     config.height,
@@ -198,8 +199,8 @@ pub fn run_header_debug(config: HeaderDebugConfig) -> Result<CompletedRun> {
                 &session.session_id[..8]
             ));
 
-            x11::capture_window_screenshot(&window_id, &screenshot_path)?;
-            let (screenshot_width, screenshot_height) = x11::image_size(&screenshot_path)?;
+            driver.screenshot(&window_id, &screenshot_path)?;
+            let (screenshot_width, screenshot_height) = driver.image_size(&screenshot_path)?;
             let top_strip_height = clamp(config.header_height, 1, screenshot_height);
             crop_image(
                 &screenshot_path,
@@ -228,8 +229,8 @@ pub fn run_header_debug(config: HeaderDebugConfig) -> Result<CompletedRun> {
             enhance_image(&focus_path, &focus_enhanced_path)?;
 
             let top_strip_metric =
-                x11::crop_metric(&screenshot_path, 0, 0, screenshot_width, top_strip_height)?;
-            let focus_metric = x11::crop_metric(
+                driver.crop_metric(&screenshot_path, 0, 0, screenshot_width, top_strip_height)?;
+            let focus_metric = driver.crop_metric(
                 &screenshot_path,
                 focus_crop.x,
                 focus_crop.y,

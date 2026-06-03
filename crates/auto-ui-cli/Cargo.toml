@@ -13,6 +13,7 @@ auto-ui-adapter-gpui = { path = "../auto-ui-adapter-gpui" }
 auto-ui-adapter-rust-chatbot = { path = "../auto-ui-adapter-rust-chatbot" }
 auto-ui-artifacts = { path = "../auto-ui-artifacts" }
 auto-ui-core = { path = "../auto-ui-core" }
+auto-ui-driver-x11 = { path = "../auto-ui-driver-x11" }
 clap.workspace = true
 schemars.workspace = true
 serde = { workspace = true }

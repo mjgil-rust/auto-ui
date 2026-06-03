@@ -1,4 +1,5 @@
 fn run_width_session(
+    driver: &dyn WindowDriver,
     config: &DebugConfig,
     app_root: &PathBuf,
     title: &str,
@@ -24,6 +25,7 @@ fn run_width_session(
         if per_session_launch_mode {
             let startup_log_offset = fs::metadata(log_path)?.len();
             let (new_pid, new_window_id) = launch_targeted_session_window(
+                driver,
                 app_root,
                 config.provider,
                 config.instance,
@@ -72,7 +74,7 @@ fn run_width_session(
             )?;
             let interaction_window_id = interaction_window_id
                 .ok_or_else(|| anyhow!("No interaction window is available for selection."))?;
-            x11::select_session(interaction_window_id, &session.name)?;
+            driver.select_session(interaction_window_id, &session.name)?;
             thread::sleep(seconds(config.settle));
         }
 
@@ -84,14 +86,14 @@ fn run_width_session(
             Some(progress_path),
         )?;
         let geometry = if !config.keep_front {
-            x11::prepare_window_for_capture(
+            driver.prepare_window_for_capture(
                 &current_window_id,
                 width,
                 config.height,
                 desktop_window_id,
             )?
         } else {
-            x11::resize_window(&current_window_id, width, config.height)?
+            driver.resize(&current_window_id, width, config.height)?
         };
         thread::sleep(seconds(config.settle));
 
@@ -140,13 +142,13 @@ fn run_width_session(
             ),
             Some(progress_path),
         )?;
-        x11::capture_window_screenshot(&current_window_id, &screenshot_path)?;
+        driver.screenshot(&current_window_id, &screenshot_path)?;
 
         let ppp = trace
             .get("pixels_per_point")
             .and_then(|value| value.parse::<f64>().ok())
             .unwrap_or(1.0);
-        let (screenshot_width, screenshot_height) = x11::image_size(&screenshot_path)?;
+        let (screenshot_width, screenshot_height) = driver.image_size(&screenshot_path)?;
         let crop_x = (trace
             .get("first_rect_min_x")
             .and_then(|value| value.parse::<f64>().ok())
@@ -177,7 +179,7 @@ fn run_width_session(
             * ppp) as i32)
             .max(1)
             .min(max_crop_height);
-        let metric = x11::crop_metric(&screenshot_path, crop_x, crop_y, crop_width, crop_height)?;
+        let metric = driver.crop_metric(&screenshot_path, crop_x, crop_y, crop_width, crop_height)?;
 
         log_line(
             format!(
@@ -191,7 +193,7 @@ fn run_width_session(
                     .map(String::as_str)
                     .unwrap_or("n/a"),
                 code_block_traces.len(),
-                x11::heuristic_text_visible(&metric)
+                heuristic_text_visible(&metric)
             ),
             Some(progress_path),
         )?;
@@ -218,7 +220,7 @@ fn run_width_session(
                 "height": crop_height,
             },
             "visual_metric": metric,
-            "text_visible_heuristic": x11::heuristic_text_visible(&metric),
+            "text_visible_heuristic": heuristic_text_visible(&metric),
         }))
     })();
 

@@ -124,6 +124,16 @@ impl WindowDriver for X11WindowDriver {
     fn image_size(&self, image_path: &Path) -> Result<(i32, i32)> {
         image_size(image_path)
     }
+
+    fn prepare_window_for_capture(
+        &self,
+        window_id: &str,
+        width: u32,
+        height: u32,
+        restore_window_id: Option<&str>,
+    ) -> Result<WindowGeometry> {
+        prepare_window_for_capture(window_id, width, height, restore_window_id)
+    }
 }
 
 impl Default for X11WindowDriver {

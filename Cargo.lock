@@ -91,6 +91,7 @@ dependencies = [
  "auto-ui-adapter-rust-chatbot",
  "auto-ui-artifacts",
  "auto-ui-core",
+ "auto-ui-driver-x11",
  "clap",
  "schemars",
  "serde",

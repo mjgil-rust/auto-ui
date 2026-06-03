@@ -365,6 +365,7 @@ fn wait_for_pid_exit(app_root: &Path, pid: i32, timeout: Duration) -> Result<()>
 }
 
 fn launch_targeted_session_window(
+    driver: &dyn WindowDriver,
     app_root: &Path,
     provider: Provider,
     instance: Option<u32>,
@@ -376,7 +377,7 @@ fn launch_targeted_session_window(
     restore_window_id: Option<&str>,
 ) -> Result<(i32, String)> {
     let existing_pids = list_chatbot_pids(app_root)?;
-    let existing_window_ids: HashSet<_> = x11::find_window_ids(title)?.into_iter().collect();
+    let existing_window_ids: HashSet<_> = driver.find_windows(title)?.into_iter().collect();
     log_line(
         format!(
             "launching fresh {title} with RUST_CHATBOT_AUTO_UI_DEBUG=1 session_id={session_id}"
@@ -391,8 +392,8 @@ fn launch_targeted_session_window(
                 format!("detected launched_pid={launched_pid}"),
                 progress_path,
             )?;
-            x11::find_window_id_for_pid(launched_pid, window_timeout)?
-                .or(x11::wait_for_new_window_id(
+            driver.find_window_for_pid(launched_pid, window_timeout)?
+                .or(driver.wait_for_new_window(
                     title,
                     &existing_window_ids,
                     window_timeout,
@@ -404,14 +405,14 @@ fn launch_targeted_session_window(
                     .to_string(),
                 progress_path,
             )?;
-            x11::wait_for_new_window_id(title, &existing_window_ids, window_timeout)?
+            driver.wait_for_new_window(title, &existing_window_ids, window_timeout)?
         }
     };
     let window_id = match window_id {
         Some(window_id) => window_id,
         None => {
-            let matching_windows = x11::find_window_ids(title)?;
-            let active_window = x11::get_active_window_id()?;
+            let matching_windows = driver.find_windows(title)?;
+            let active_window = driver.get_active_window()?;
             let reused_window = active_window
                 .filter(|window_id| matching_windows.iter().any(|candidate| candidate == window_id))
                 .or_else(|| matching_windows.last().cloned());
@@ -433,7 +434,7 @@ fn launch_targeted_session_window(
     let launched_pid = match launched_pid {
         Some(launched_pid) => launched_pid,
         None => {
-            let recovered = x11::get_window_pid(&window_id)?.ok_or_else(|| {
+            let recovered = driver.get_window_pid(&window_id)?.ok_or_else(|| {
                 anyhow!(
                     "Could not detect a newly launched PID for {title:?}, and could not recover one from window {window_id}."
                 )
@@ -446,20 +447,21 @@ fn launch_targeted_session_window(
         }
     };
     if !keep_front {
-        x11::background_window(&window_id, restore_window_id)?;
+        driver.background(&window_id, restore_window_id)?;
     }
     log_line(format!("using window_id={window_id}"), progress_path)?;
     Ok((launched_pid, window_id))
 }
 
 fn restore_reused_window(
+    driver: &dyn WindowDriver,
     window_id: &str,
-    geometry: &x11::WindowGeometry,
+    geometry: &WindowGeometry,
     keep_front: bool,
     restore_window_id: Option<&str>,
     progress_path: Option<&Path>,
 ) -> Result<()> {
-    if !x11::window_exists(window_id)? {
+    if !driver.window_exists(window_id)? {
         log_line(
             format!("skipping restore for window_id={window_id} because the window is no longer available"),
             progress_path,
@@ -474,9 +476,9 @@ fn restore_reused_window(
         ),
         progress_path,
     )?;
-    x11::set_window_geometry(window_id, geometry)?;
+    driver.set_geometry(window_id, geometry)?;
     if !keep_front {
-        x11::background_window(window_id, restore_window_id)?;
+        driver.background(window_id, restore_window_id)?;
     }
     Ok(())
 }
@@ -690,7 +692,7 @@ fn wait_for_trace_bundle(
 
 fn approximate_header_focus_crop(
     trace: &TraceFields,
-    geometry: &x11::WindowGeometry,
+    geometry: &WindowGeometry,
     screenshot_width: i32,
     screenshot_height: i32,
     header_height: i32,

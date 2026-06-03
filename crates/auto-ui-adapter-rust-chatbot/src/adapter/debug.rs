@@ -241,6 +241,7 @@ pub fn validate_named_scenario(scenario: &str, value: &Value) -> Result<()> {
 }
 
 pub fn run_named_scenario(
+    driver: &dyn WindowDriver,
     scenario: &str,
     value: Value,
     output_override: Option<String>,
@@ -248,26 +249,26 @@ pub fn run_named_scenario(
     match normalize_name(scenario).as_str() {
         "debug" => {
             let config = debug_config_from_scenario(value, output_override)?;
-            run_debug(config)
+            run_debug(driver, config)
         }
         "header_debug" => {
             let config = header_config_from_scenario(value, output_override)?;
-            run_header_debug(config)
+            run_header_debug(driver, config)
         }
         "prompt_debug" => {
             let config = prompt_debug_config_from_scenario(value, output_override)?;
-            run_prompt_debug(config)
+            run_prompt_debug(driver, config)
         }
         other => bail!("Unsupported rust-chatbot scenario {other:?}."),
     }
 }
 
-pub fn run_debug(config: DebugConfig) -> Result<CompletedRun> {
+pub fn run_debug(driver: &dyn WindowDriver, config: DebugConfig) -> Result<CompletedRun> {
     auto_ui_core::ensure_display("Rust Chatbot")?;
 
     let app_root = resolve_app_root(config.app_root.as_deref())?;
     require_release_binaries(&app_root, &["chatbot-ctl", "rust-chatbot"])?;
-    let desktop_window_id = x11::get_active_window_id()?;
+    let desktop_window_id = driver.get_active_window()?;
 
     let widths = parse_widths(&config.widths)?;
     let sessions = if let Some(session_id) = config.session_id.as_deref() {
@@ -315,15 +316,15 @@ pub fn run_debug(config: DebugConfig) -> Result<CompletedRun> {
     let mut window_id: Option<String> = None;
     let mut interaction_window_id: Option<String> = None;
     let mut launched_debug_pid: Option<i32> = None;
-    let mut restore_window_geometry: Option<(String, x11::WindowGeometry)> = None;
+    let mut restore_window_geometry: Option<(String, WindowGeometry)> = None;
 
     if !per_session_launch_mode {
         if config.launch_if_missing {
             let existing_pids = list_chatbot_pids(&app_root)?;
             let existing_window_ids: HashSet<_> =
-                x11::find_window_ids(&title)?.into_iter().collect();
+                driver.find_windows(&title)?.into_iter().collect();
             let existing_interaction_window_ids: HashSet<_> =
-                x11::find_interaction_window_ids(&title)?
+                driver.find_windows(&title)?
                     .into_iter()
                     .collect();
             log_line(
@@ -345,15 +346,15 @@ pub fn run_debug(config: DebugConfig) -> Result<CompletedRun> {
                     Some(&progress_path),
                 )?;
                 window_id =
-                    x11::find_window_id_for_pid(launched_pid, seconds(config.window_timeout))?;
-                interaction_window_id = x11::find_interaction_window_id_for_pid(
+                    driver.find_window_for_pid(launched_pid, seconds(config.window_timeout))?;
+                interaction_window_id = driver.find_window_for_pid(
                     launched_pid,
                     seconds(config.window_timeout),
                 )?;
             }
 
             if window_id.is_none() {
-                window_id = x11::wait_for_new_window_id(
+                window_id = driver.wait_for_new_window(
                     &title,
                     &existing_window_ids,
                     seconds(config.window_timeout),
@@ -363,24 +364,24 @@ pub fn run_debug(config: DebugConfig) -> Result<CompletedRun> {
                 bail!("Could not find a new window matching {title:?} after launch.");
             };
             if interaction_window_id.is_none() {
-                interaction_window_id = x11::wait_for_new_interaction_window_id(
+                interaction_window_id = driver.wait_for_new_window(
                     &title,
                     &existing_interaction_window_ids,
                     seconds(config.window_timeout),
                 )?;
             }
             if !config.keep_front {
-                x11::background_window(&existing_window_id, desktop_window_id.as_deref())?;
+                driver.background(&existing_window_id, desktop_window_id.as_deref())?;
             }
         } else {
-            window_id = x11::find_window_id(&title, seconds(config.window_timeout))?;
+            window_id = driver.find_window(&title, seconds(config.window_timeout))?;
             if window_id.is_none() {
                 bail!(
                     "No window matching {title:?} was found. Re-run without --no-launch to let the tool start one."
                 );
             }
             interaction_window_id =
-                x11::find_interaction_window_id(&title, seconds(config.window_timeout))?;
+                driver.find_window(&title, seconds(config.window_timeout))?;
         }
 
         if interaction_window_id.is_none() {
@@ -388,7 +389,7 @@ pub fn run_debug(config: DebugConfig) -> Result<CompletedRun> {
         }
         if !config.launch_if_missing {
             if let Some(existing_window_id) = window_id.as_deref() {
-                let geometry = x11::get_window_geometry(existing_window_id)?;
+                let geometry = driver.get_geometry(existing_window_id)?;
                 log_line(
                     format!(
                         "captured original geometry window_id={existing_window_id} x={} y={} width={} height={}",
@@ -454,6 +455,7 @@ pub fn run_debug(config: DebugConfig) -> Result<CompletedRun> {
 
             for session in &sessions {
                 match run_width_session(
+                    driver,
                     &config,
                     &app_root,
                     &title,
@@ -594,6 +596,7 @@ pub fn run_debug(config: DebugConfig) -> Result<CompletedRun> {
 
     if let Some((existing_window_id, geometry)) = restore_window_geometry {
         let restore_result = restore_reused_window(
+            driver,
             &existing_window_id,
             &geometry,
             config.keep_front,

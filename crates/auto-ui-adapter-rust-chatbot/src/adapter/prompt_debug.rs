@@ -1,4 +1,4 @@
-pub fn run_prompt_debug(config: PromptDebugConfig) -> Result<CompletedRun> {
+pub fn run_prompt_debug(driver: &dyn WindowDriver, config: PromptDebugConfig) -> Result<CompletedRun> {
     auto_ui_core::ensure_display("Rust Chatbot")?;
 
     if config.session_id.trim().is_empty() {
@@ -10,7 +10,7 @@ pub fn run_prompt_debug(config: PromptDebugConfig) -> Result<CompletedRun> {
 
     let app_root = resolve_app_root(config.app_root.as_deref())?;
     require_release_binaries(&app_root, &["chatbot-ctl", "rust-chatbot"])?;
-    let desktop_window_id = x11::get_active_window_id()?;
+    let desktop_window_id = driver.get_active_window()?;
     let title = provider_title(config.provider, &app_root);
     let output_dir = build_output_dir(config.output_dir.as_deref(), "auto-ui-prompt-debug")?;
     let progress_path = output_dir.join("progress.log");
@@ -45,6 +45,7 @@ pub fn run_prompt_debug(config: PromptDebugConfig) -> Result<CompletedRun> {
     let output_dir_for_error_report = output_dir.clone();
     let result = (|| -> Result<CompletedRun> {
         let (new_pid, window_id) = launch_targeted_session_window(
+            driver,
             &app_root,
             config.provider,
             config.instance,
@@ -74,9 +75,9 @@ pub fn run_prompt_debug(config: PromptDebugConfig) -> Result<CompletedRun> {
         }
 
         if config.keep_front {
-            x11::resize_window(&window_id, config.width, config.height)?;
+            driver.resize(&window_id, config.width, config.height)?;
         } else {
-            x11::prepare_window_for_capture(
+            driver.prepare_window_for_capture(
                 &window_id,
                 config.width,
                 config.height,
@@ -111,7 +112,7 @@ pub fn run_prompt_debug(config: PromptDebugConfig) -> Result<CompletedRun> {
             config.provider.as_str(),
             &config.session_id[..8.min(config.session_id.len())]
         ));
-        x11::capture_window_screenshot(&window_id, &screenshot_path)?;
+        driver.screenshot(&window_id, &screenshot_path)?;
 
         report.add_artifact(
             "progress_log",

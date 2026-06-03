@@ -278,7 +278,8 @@ fn live_debug_single_session_smoke() {
     let _guard = live_test_lock().lock().unwrap();
     require_live_opt_in();
     let output_dir = unique_temp_dir("rust-chatbot-debug-live");
-    let completed = run_debug(DebugConfig {
+    let driver = auto_ui_driver_x11::X11WindowDriver::new();
+    let completed = run_debug(&driver, DebugConfig {
         app_root: Some(require_env("AUTO_UI_TEST_RUST_CHATBOT_ROOT")),
         provider: provider_from_env(),
         instance: None,
@@ -304,7 +305,8 @@ fn live_header_debug_single_session_smoke() {
     let _guard = live_test_lock().lock().unwrap();
     require_live_opt_in();
     let output_dir = unique_temp_dir("rust-chatbot-header-live");
-    let completed = run_header_debug(HeaderDebugConfig {
+    let driver = auto_ui_driver_x11::X11WindowDriver::new();
+    let completed = run_header_debug(&driver, HeaderDebugConfig {
         app_root: Some(require_env("AUTO_UI_TEST_RUST_CHATBOT_ROOT")),
         provider: provider_from_env(),
         instance: None,
@@ -330,7 +332,8 @@ fn live_prompt_debug_single_session_smoke() {
     let _guard = live_test_lock().lock().unwrap();
     require_live_opt_in();
     let output_dir = unique_temp_dir("rust-chatbot-prompt-live");
-    let completed = run_prompt_debug(PromptDebugConfig {
+    let driver = auto_ui_driver_x11::X11WindowDriver::new();
+    let completed = run_prompt_debug(&driver, PromptDebugConfig {
         app_root: Some(require_env("AUTO_UI_TEST_RUST_CHATBOT_ROOT")),
         provider: provider_from_env(),
         instance: None,
