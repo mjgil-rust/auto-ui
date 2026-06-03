@@ -10,8 +10,8 @@ use std::time::{Duration, Instant};
 use anyhow::{anyhow, bail, Context, Result};
 use auto_ui_artifacts::{write_report, Report};
 use auto_ui_core::{
-    build_output_dir, expand_path, home_dir, log_line, normalize_name, parse_widths, repo_root,
-    request_background_launch, run_command, CompletedRun, TraceFields,
+    build_output_dir, crop_image, enhance_image, expand_path, home_dir, log_line, normalize_name,
+    parse_widths, repo_root, request_background_launch, run_command, CompletedRun, TraceFields,
 };
 use auto_ui_driver_x11 as x11;
 use clap::ValueEnum;

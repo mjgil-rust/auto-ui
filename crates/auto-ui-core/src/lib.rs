@@ -8,6 +8,7 @@ pub mod retry;
 pub mod safe_log;
 mod startup_orchestration;
 pub mod trace_parse;
+pub mod image_processing;
 pub mod window_driver;
 
 use std::collections::BTreeMap;
@@ -40,6 +41,7 @@ pub use hybrid_orchestration::{HybridOrchestrationConfig, HybridOrchestrator};
 pub use interactive_window_orchestration::{
     InteractiveOrchestrationConfig, InteractiveWindowOrchestrator, WindowState,
 };
+pub use image_processing::{crop_image, crop_metric, enhance_image, image_size};
 pub use window_driver::{
     heuristic_text_visible, VisualMetric, WindowDriver, WindowGeometry,
 };

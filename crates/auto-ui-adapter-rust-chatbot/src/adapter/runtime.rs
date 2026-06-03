@@ -688,33 +688,6 @@ fn wait_for_trace_bundle(
     bail!("No ui_auto_debug trace observed for session {session_id}")
 }
 
-fn crop_image(source: &Path, target: &Path, x: i32, y: i32, width: i32, height: i32) -> Result<()> {
-    let geometry = format!("{width}x{height}+{x}+{y}");
-    let mut cmd = Command::new("convert");
-    cmd.arg(source)
-        .arg("-crop")
-        .arg(geometry)
-        .arg("+repage")
-        .arg(target);
-    run_command(&mut cmd, true)?;
-    Ok(())
-}
-
-fn enhance_image(source: &Path, target: &Path) -> Result<()> {
-    let mut cmd = Command::new("convert");
-    cmd.arg(source)
-        .arg("-colorspace")
-        .arg("Gray")
-        .arg("-normalize")
-        .arg("-contrast-stretch")
-        .arg("1%x1%")
-        .arg("-resize")
-        .arg("200%")
-        .arg(target);
-    run_command(&mut cmd, true)?;
-    Ok(())
-}
-
 fn approximate_header_focus_crop(
     trace: &TraceFields,
     geometry: &x11::WindowGeometry,
