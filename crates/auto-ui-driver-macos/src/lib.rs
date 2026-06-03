@@ -220,20 +220,114 @@ impl WindowDriver for MacOsWindowDriver {
         bail!("prepare_window_for_capture not yet implemented for macOS")
     }
 
-    fn press_key(&self, _window_id: &str, _key: &str) -> Result<()> {
-        bail!("press_key not yet implemented for macOS")
+    fn press_key(&self, _window_id: &str, key: &str) -> Result<()> {
+        use core_graphics::event::{CGEvent, CGEventFlags, CGEventTapLocation, KeyCode};
+        use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
+
+        let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState)
+            .map_err(|_| anyhow::anyhow!("failed to create CGEventSource"))?;
+
+        // Parse modifiers and key name.
+        let parts: Vec<&str> = key.split('+').collect();
+        let mut flags = CGEventFlags::CGEventFlagNull;
+        let key_name = parts.last().unwrap_or(&"").trim();
+        for part in &parts[..parts.len().saturating_sub(1)] {
+            match part.trim().to_lowercase().as_str() {
+                "ctrl" | "control" => flags |= CGEventFlags::CGEventFlagControl,
+                "shift" => flags |= CGEventFlags::CGEventFlagShift,
+                "alt" | "option" => flags |= CGEventFlags::CGEventFlagAlternate,
+                "cmd" | "command" | "meta" => flags |= CGEventFlags::CGEventFlagCommand,
+                _ => {}
+            }
+        }
+
+        let keycode = match key_name {
+            "BackSpace" | "Backspace" | "Delete" => 51,
+            "Return" | "Enter" => 36,
+            "Escape" | "Esc" => 53,
+            "Tab" => 48,
+            "Space" => 49,
+            "a" | "A" => KeyCode::ANSI_A,
+            "b" | "B" => KeyCode::ANSI_B,
+            "c" | "C" => KeyCode::ANSI_C,
+            "d" | "D" => KeyCode::ANSI_D,
+            "e" | "E" => KeyCode::ANSI_E,
+            "f" | "F" => KeyCode::ANSI_F,
+            "g" | "G" => KeyCode::ANSI_G,
+            "h" | "H" => KeyCode::ANSI_H,
+            "i" | "I" => KeyCode::ANSI_I,
+            "j" | "J" => KeyCode::ANSI_J,
+            "k" | "K" => KeyCode::ANSI_K,
+            "l" | "L" => KeyCode::ANSI_L,
+            "m" | "M" => KeyCode::ANSI_M,
+            "n" | "N" => KeyCode::ANSI_N,
+            "o" | "O" => KeyCode::ANSI_O,
+            "p" | "P" => KeyCode::ANSI_P,
+            "q" | "Q" => KeyCode::ANSI_Q,
+            "r" | "R" => KeyCode::ANSI_R,
+            "s" | "S" => KeyCode::ANSI_S,
+            "t" | "T" => KeyCode::ANSI_T,
+            "u" | "U" => KeyCode::ANSI_U,
+            "v" | "V" => KeyCode::ANSI_V,
+            "w" | "W" => KeyCode::ANSI_W,
+            "x" | "X" => KeyCode::ANSI_X,
+            "y" | "Y" => KeyCode::ANSI_Y,
+            "z" | "Z" => KeyCode::ANSI_Z,
+            "0" => KeyCode::ANSI_0,
+            "1" => KeyCode::ANSI_1,
+            "2" => KeyCode::ANSI_2,
+            "3" => KeyCode::ANSI_3,
+            "4" => KeyCode::ANSI_4,
+            "5" => KeyCode::ANSI_5,
+            "6" => KeyCode::ANSI_6,
+            "7" => KeyCode::ANSI_7,
+            "8" => KeyCode::ANSI_8,
+            "9" => KeyCode::ANSI_9,
+            _ => bail!("unsupported key name: {key_name}"),
+        };
+
+        let down = CGEvent::new_keyboard_event(source.clone(), keycode, true)
+            .map_err(|_| anyhow::anyhow!("failed to create keydown event"))?;
+        if flags != CGEventFlags::CGEventFlagNull {
+            down.set_flags(flags);
+        }
+        down.post(CGEventTapLocation::HID);
+
+        let up = CGEvent::new_keyboard_event(source, keycode, false)
+            .map_err(|_| anyhow::anyhow!("failed to create keyup event"))?;
+        if flags != CGEventFlags::CGEventFlagNull {
+            up.set_flags(flags);
+        }
+        up.post(CGEventTapLocation::HID);
+
+        Ok(())
     }
 
-    fn type_text(&self, _window_id: &str, _text: &str) -> Result<()> {
-        bail!("type_text not yet implemented for macOS")
+    fn type_text(&self, _window_id: &str, text: &str) -> Result<()> {
+        use core_graphics::event::{CGEvent, CGEventTapLocation};
+        use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
+
+        let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState)
+            .map_err(|_| anyhow::anyhow!("failed to create CGEventSource"))?;
+        let event = CGEvent::new_keyboard_event(source, 0, true)
+            .map_err(|_| anyhow::anyhow!("failed to create keyboard event"))?;
+        event.set_string(text);
+        event.post(CGEventTapLocation::HID);
+        Ok(())
     }
 
-    fn clear_search(&self, _window_id: &str) -> Result<()> {
-        bail!("clear_search not yet implemented for macOS")
+    fn clear_search(&self, window_id: &str) -> Result<()> {
+        self.press_key(window_id, "ctrl+a")?;
+        self.press_key(window_id, "BackSpace")
     }
 
-    fn select_session(&self, _window_id: &str, _session_name: &str) -> Result<()> {
-        bail!("select_session not yet implemented for macOS")
+    fn select_session(&self, window_id: &str, session_name: &str) -> Result<()> {
+        self.press_key(window_id, "ctrl+f")?;
+        std::thread::sleep(Duration::from_millis(100));
+        self.clear_search(window_id)?;
+        self.type_text(window_id, session_name)?;
+        std::thread::sleep(Duration::from_millis(100));
+        self.press_key(window_id, "Return")
     }
 
     fn screenshot(&self, window_id: &str, output_path: &Path) -> Result<()> {
