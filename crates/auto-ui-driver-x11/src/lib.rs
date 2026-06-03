@@ -6,26 +6,130 @@ use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, bail, Context, Result};
 use auto_ui_core::{render_command, run_command};
-use serde::Serialize;
 
 mod fake_driver;
-pub mod window_driver_trait;
 
+pub use auto_ui_core::window_driver::{
+    heuristic_text_visible, VisualMetric, WindowDriver, WindowGeometry,
+};
 pub use fake_driver::{FakeWindowDriver, FakeWindowState, FAKE_WINDOW_ID};
-pub use window_driver_trait::{WindowDriver, WindowResult};
 
-#[derive(Clone, Debug, Serialize)]
-pub struct WindowGeometry {
-    pub x: i32,
-    pub y: i32,
-    pub width: i32,
-    pub height: i32,
+/// Concrete X11 window driver backed by `xdotool`, `wmctrl`, and ImageMagick.
+pub struct X11WindowDriver;
+
+impl X11WindowDriver {
+    /// Create a new X11 window driver.
+    pub fn new() -> Self {
+        Self
+    }
 }
 
-#[derive(Clone, Debug, Serialize)]
-pub struct VisualMetric {
-    pub stddev: f64,
-    pub colors: f64,
+impl WindowDriver for X11WindowDriver {
+    fn check_required_tools(&self) -> Result<()> {
+        check_required_tools()
+    }
+
+    fn find_windows(&self, title_substring: &str) -> Result<Vec<String>> {
+        find_interaction_window_ids(title_substring)
+    }
+
+    fn find_windows_for_pid(&self, pid: i32) -> Result<Vec<String>> {
+        find_interaction_window_ids_for_pid(pid)
+    }
+
+    fn find_window(&self, title_substring: &str, timeout: Duration) -> Result<Option<String>> {
+        find_interaction_window_id(title_substring, timeout)
+    }
+
+    fn find_window_for_pid(&self, pid: i32, timeout: Duration) -> Result<Option<String>> {
+        find_interaction_window_id_for_pid(pid, timeout)
+    }
+
+    fn wait_for_new_window(
+        &self,
+        title_substring: &str,
+        before_ids: &HashSet<String>,
+        timeout: Duration,
+    ) -> Result<Option<String>> {
+        wait_for_new_interaction_window_id(title_substring, before_ids, timeout)
+    }
+
+    fn get_active_window(&self) -> Result<Option<String>> {
+        get_active_window_id()
+    }
+
+    fn get_window_pid(&self, window_id: &str) -> Result<Option<i32>> {
+        get_window_pid(window_id)
+    }
+
+    fn get_geometry(&self, window_id: &str) -> Result<WindowGeometry> {
+        get_window_geometry(window_id)
+    }
+
+    fn resize(&self, window_id: &str, width: u32, height: u32) -> Result<WindowGeometry> {
+        resize_window(window_id, width, height)
+    }
+
+    fn set_geometry(&self, window_id: &str, geometry: &WindowGeometry) -> Result<WindowGeometry> {
+        set_window_geometry(window_id, geometry)
+    }
+
+    fn activate(&self, window_id: &str) -> Result<()> {
+        activate_window(window_id)
+    }
+
+    fn lower(&self, window_id: &str) -> Result<()> {
+        lower_window(window_id)
+    }
+
+    fn background(&self, window_id: &str, restore_window_id: Option<&str>) -> Result<()> {
+        background_window(window_id, restore_window_id)
+    }
+
+    fn window_exists(&self, window_id: &str) -> Result<bool> {
+        window_exists(window_id)
+    }
+
+    fn press_key(&self, window_id: &str, key: &str) -> Result<()> {
+        press_key(window_id, key)
+    }
+
+    fn type_text(&self, window_id: &str, text: &str) -> Result<()> {
+        type_text(window_id, text)
+    }
+
+    fn clear_search(&self, window_id: &str) -> Result<()> {
+        clear_search(window_id)
+    }
+
+    fn select_session(&self, window_id: &str, session_name: &str) -> Result<()> {
+        select_session(window_id, session_name)
+    }
+
+    fn screenshot(&self, window_id: &str, output_path: &Path) -> Result<()> {
+        capture_window_screenshot(window_id, output_path)
+    }
+
+    fn crop_metric(
+        &self,
+        image_path: &Path,
+        x: i32,
+        y: i32,
+        width: i32,
+        height: i32,
+    ) -> Result<VisualMetric> {
+        crop_metric(image_path, x, y, width, height)
+    }
+
+    fn image_size(&self, image_path: &Path) -> Result<(i32, i32)> {
+        image_size(image_path)
+    }
+}
+
+impl Default for X11WindowDriver {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 pub fn find_interaction_window_ids(title_substring: &str) -> Result<Vec<String>> {
@@ -403,10 +507,6 @@ pub fn image_size(image_path: &Path) -> Result<(i32, i32)> {
     Ok((width, height))
 }
 
-pub fn heuristic_text_visible(metric: &VisualMetric) -> bool {
-    metric.stddev >= 0.01 || metric.colors >= 16.0
-}
-
 /// Tools required by the X11 driver for window operations and screenshot capture.
 pub const REQUIRED_X11_TOOLS: &[&str] = &["xdotool", "wmctrl", "import", "convert", "identify"];
 
@@ -613,5 +713,11 @@ mod tests {
         assert!(REQUIRED_X11_TOOLS.contains(&"import"));
         assert!(REQUIRED_X11_TOOLS.contains(&"convert"));
         assert!(REQUIRED_X11_TOOLS.contains(&"identify"));
+    }
+
+    #[test]
+    fn x11_window_driver_implements_window_driver_trait() {
+        fn _assert_trait<T: WindowDriver>() {}
+        _assert_trait::<X11WindowDriver>();
     }
 }

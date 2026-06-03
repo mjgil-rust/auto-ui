@@ -4,12 +4,12 @@
 //! that doesn't require X11 tools, allowing orchestration tests to run
 //! in CI without a display.
 
-use std::collections::HashMap;
-use std::path::PathBuf;
+use std::collections::{HashMap, HashSet};
+use std::path::Path;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
-use super::window_driver_trait::WindowDriver;
-use super::WindowGeometry;
+use super::{WindowDriver, WindowGeometry, VisualMetric};
 
 /// A fake window ID for testing.
 pub const FAKE_WINDOW_ID: &str = "0xFAKE123";
@@ -84,12 +84,50 @@ impl FakeWindowDriver {
 }
 
 impl WindowDriver for FakeWindowDriver {
-    fn find_windows(&self, _title: &str) -> anyhow::Result<Vec<String>> {
+    fn check_required_tools(&self) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn find_windows(&self, _title_substring: &str) -> anyhow::Result<Vec<String>> {
         Ok(self.state.lock().unwrap().keys().cloned().collect())
     }
 
     fn find_windows_for_pid(&self, _pid: i32) -> anyhow::Result<Vec<String>> {
         Ok(self.state.lock().unwrap().keys().cloned().collect())
+    }
+
+    fn find_window(
+        &self,
+        _title_substring: &str,
+        _timeout: Duration,
+    ) -> anyhow::Result<Option<String>> {
+        Ok(self.state.lock().unwrap().keys().next().cloned())
+    }
+
+    fn find_window_for_pid(
+        &self,
+        _pid: i32,
+        _timeout: Duration,
+    ) -> anyhow::Result<Option<String>> {
+        Ok(self.state.lock().unwrap().keys().next().cloned())
+    }
+
+    fn wait_for_new_window(
+        &self,
+        _title_substring: &str,
+        _before_ids: &HashSet<String>,
+        _timeout: Duration,
+    ) -> anyhow::Result<Option<String>> {
+        Ok(None)
+    }
+
+    fn get_active_window(&self) -> anyhow::Result<Option<String>> {
+        let state = self.state.lock().unwrap();
+        Ok(state.iter().find(|(_, v)| v.active).map(|(k, _)| k.clone()))
+    }
+
+    fn get_window_pid(&self, _window_id: &str) -> anyhow::Result<Option<i32>> {
+        Ok(None)
     }
 
     fn get_geometry(&self, window_id: &str) -> anyhow::Result<WindowGeometry> {
@@ -101,8 +139,29 @@ impl WindowDriver for FakeWindowDriver {
             .ok_or_else(|| anyhow::anyhow!("window not found: {}", window_id))
     }
 
-    fn window_exists(&self, window_id: &str) -> anyhow::Result<bool> {
-        Ok(self.state.lock().unwrap().contains_key(window_id))
+    fn resize(&self, window_id: &str, width: u32, height: u32) -> anyhow::Result<WindowGeometry> {
+        let mut state = self.state.lock().unwrap();
+        if let Some(win) = state.get_mut(window_id) {
+            win.geometry.width = width as i32;
+            win.geometry.height = height as i32;
+            Ok(win.geometry.clone())
+        } else {
+            Err(anyhow::anyhow!("window not found: {}", window_id))
+        }
+    }
+
+    fn set_geometry(
+        &self,
+        window_id: &str,
+        geometry: &WindowGeometry,
+    ) -> anyhow::Result<WindowGeometry> {
+        let mut state = self.state.lock().unwrap();
+        if let Some(win) = state.get_mut(window_id) {
+            win.geometry = geometry.clone();
+            Ok(win.geometry.clone())
+        } else {
+            Err(anyhow::anyhow!("window not found: {}", window_id))
+        }
     }
 
     fn activate(&self, window_id: &str) -> anyhow::Result<()> {
@@ -117,28 +176,54 @@ impl WindowDriver for FakeWindowDriver {
         Ok(())
     }
 
-    fn resize(&self, window_id: &str, width: u32, height: u32) -> anyhow::Result<WindowGeometry> {
+    fn background(&self, window_id: &str, _restore_window_id: Option<&str>) -> anyhow::Result<()> {
         let mut state = self.state.lock().unwrap();
         if let Some(win) = state.get_mut(window_id) {
-            win.geometry.width = width as i32;
-            win.geometry.height = height as i32;
-            Ok(win.geometry.clone())
-        } else {
-            Err(anyhow::anyhow!("window not found: {}", window_id))
+            win.active = false;
         }
+        Ok(())
     }
 
-    fn screenshot(&self, _window_id: &str, _output_path: &PathBuf) -> anyhow::Result<()> {
-        Ok(())
+    fn window_exists(&self, window_id: &str) -> anyhow::Result<bool> {
+        Ok(self.state.lock().unwrap().contains_key(window_id))
     }
 
     fn press_key(&self, _window_id: &str, _key: &str) -> anyhow::Result<()> {
         Ok(())
     }
 
-    fn get_active_window(&self) -> anyhow::Result<Option<String>> {
-        let state = self.state.lock().unwrap();
-        Ok(state.iter().find(|(_, v)| v.active).map(|(k, _)| k.clone()))
+    fn type_text(&self, _window_id: &str, _text: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn clear_search(&self, _window_id: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn select_session(&self, _window_id: &str, _session_name: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn screenshot(&self, _window_id: &str, _output_path: &Path) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn crop_metric(
+        &self,
+        _image_path: &Path,
+        _x: i32,
+        _y: i32,
+        _width: i32,
+        _height: i32,
+    ) -> anyhow::Result<VisualMetric> {
+        Ok(VisualMetric {
+            stddev: 0.05,
+            colors: 32.0,
+        })
+    }
+
+    fn image_size(&self, _image_path: &Path) -> anyhow::Result<(i32, i32)> {
+        Ok((800, 600))
     }
 }
 

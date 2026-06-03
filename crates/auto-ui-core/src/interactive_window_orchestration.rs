@@ -7,8 +7,7 @@ use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Result};
-use serde::{Deserialize, Serialize};
-
+use crate::window_driver::WindowGeometry;
 use crate::{log_line, Event, LaunchedRun, WindowSelector};
 
 /// Configuration for interactive window orchestration.
@@ -68,16 +67,6 @@ impl InteractiveOrchestrationConfig {
         self.progress_log = Some(path);
         self
     }
-}
-
-/// Window geometry information.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub struct WindowGeometry {
-    pub x: i32,
-    pub y: i32,
-    pub width: u32,
-    pub height: u32,
 }
 
 /// State captured before window manipulation for restoration.
@@ -185,8 +174,8 @@ impl InteractiveWindowOrchestrator {
         Ok(WindowGeometry {
             x: 0,
             y: 0,
-            width,
-            height,
+            width: width as i32,
+            height: height as i32,
         })
     }
 

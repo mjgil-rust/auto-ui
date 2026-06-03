@@ -8,6 +8,7 @@ pub mod retry;
 pub mod safe_log;
 mod startup_orchestration;
 pub mod trace_parse;
+pub mod window_driver;
 
 use std::collections::BTreeMap;
 use std::env;
@@ -37,7 +38,10 @@ pub use errors::{
 };
 pub use hybrid_orchestration::{HybridOrchestrationConfig, HybridOrchestrator};
 pub use interactive_window_orchestration::{
-    InteractiveOrchestrationConfig, InteractiveWindowOrchestrator, WindowGeometry, WindowState,
+    InteractiveOrchestrationConfig, InteractiveWindowOrchestrator, WindowState,
+};
+pub use window_driver::{
+    heuristic_text_visible, VisualMetric, WindowDriver, WindowGeometry,
 };
 pub use retry::{
     retry_with_backoff, trace_wait_config, window_discovery_config, RetryConfig, RetryError,
