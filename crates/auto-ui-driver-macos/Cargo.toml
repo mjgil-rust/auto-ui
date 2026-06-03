@@ -8,5 +8,6 @@ anyhow.workspace = true
 auto-ui-core = { path = "../auto-ui-core" }
 core-graphics = "0.25"
 core-foundation = "0.10"
+image = { version = "0.25", default-features = false, features = ["png"] }
 libc.workspace = true
 tracing.workspace = true

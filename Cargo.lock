@@ -165,6 +165,7 @@ dependencies = [
  "auto-ui-core",
  "core-foundation",
  "core-graphics",
+ "image",
  "libc",
  "tracing",
 ]

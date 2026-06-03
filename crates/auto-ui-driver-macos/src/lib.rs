@@ -3,7 +3,7 @@ use std::ffi::c_void;
 use std::path::Path;
 use std::time::Duration;
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use auto_ui_core::{VisualMetric, WindowDriver, WindowGeometry};
 use core_foundation::base::{CFType, TCFType};
 use core_foundation::dictionary::CFDictionary;
@@ -55,8 +55,18 @@ fn get_i64(dict: &CFDictionary<CFString, CFType>, key: CFString) -> Option<i64> 
 
 impl WindowDriver for MacOsWindowDriver {
     fn check_required_tools(&self) -> Result<()> {
-        // macOS requires Accessibility permissions instead of external tools.
-        // TODO(Phase 4): Implement AXIsProcessTrustedWithOptions check.
+        #[link(name = "ApplicationServices", kind = "framework")]
+        extern "C" {
+            fn AXIsProcessTrustedWithOptions(options: *const c_void) -> bool;
+        }
+        let trusted = unsafe { AXIsProcessTrustedWithOptions(std::ptr::null()) };
+        if !trusted {
+            bail!(
+                "macOS Accessibility permission is not granted. \
+                 Open System Settings > Privacy & Security > Accessibility, \
+                 and enable this application."
+            );
+        }
         Ok(())
     }
 
@@ -135,7 +145,19 @@ impl WindowDriver for MacOsWindowDriver {
     }
 
     fn get_active_window(&self) -> Result<Option<String>> {
-        bail!("get_active_window not yet implemented for macOS")
+        // Use CoreGraphics to find the frontmost on-screen normal window.
+        // This is a heuristic; the most accurate method requires Accessibility APIs.
+        let windows = window_list();
+        for dict in windows {
+            let layer = get_i64(&dict, unsafe { CFString::wrap_under_get_rule(core_graphics::window::kCGWindowLayer) }).unwrap_or(0);
+            let onscreen = get_i64(&dict, unsafe { CFString::wrap_under_get_rule(core_graphics::window::kCGWindowIsOnscreen) }).unwrap_or(0);
+            if layer == 0 && onscreen == 1 {
+                if let Some(id) = get_i64(&dict, unsafe { CFString::wrap_under_get_rule(kCGWindowNumber) }) {
+                    return Ok(Some(id.to_string()));
+                }
+            }
+        }
+        Ok(None)
     }
 
     fn get_window_pid(&self, window_id: &str) -> Result<Option<i32>> {
@@ -214,8 +236,51 @@ impl WindowDriver for MacOsWindowDriver {
         bail!("select_session not yet implemented for macOS")
     }
 
-    fn screenshot(&self, _window_id: &str, _output_path: &Path) -> Result<()> {
-        bail!("screenshot not yet implemented for macOS")
+    fn screenshot(&self, window_id: &str, output_path: &Path) -> Result<()> {
+        use core_graphics::display::CGRectNull;
+        use core_graphics::window::{
+            create_image, kCGWindowImageBoundsIgnoreFraming, kCGWindowListOptionIncludingWindow,
+        };
+
+        let window_id_num: u32 = window_id.parse().map_err(|_| anyhow::anyhow!("invalid window id: {window_id}"))?;
+        let Some(image) = create_image(
+            unsafe { CGRectNull },
+            kCGWindowListOptionIncludingWindow,
+            window_id_num,
+            kCGWindowImageBoundsIgnoreFraming,
+        ) else {
+            bail!("failed to capture screenshot for window {window_id}");
+        };
+
+        let width = image.width();
+        let height = image.height();
+        let bytes_per_row = image.bytes_per_row();
+        let data = image.data();
+        let raw = data.bytes();
+
+        // CoreGraphics window images are typically BGRA with premultiplied alpha.
+        // Convert to RGBA for the image crate.
+        let mut rgba = Vec::with_capacity(width * height * 4);
+        for row in 0..height {
+            let row_start = row * bytes_per_row;
+            for col in 0..width {
+                let idx = row_start + col * 4;
+                let b = raw[idx];
+                let g = raw[idx + 1];
+                let r = raw[idx + 2];
+                let a = raw[idx + 3];
+                rgba.push(r);
+                rgba.push(g);
+                rgba.push(b);
+                rgba.push(a);
+            }
+        }
+
+        let rgba_image = image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(width as u32, height as u32, rgba)
+            .ok_or_else(|| anyhow::anyhow!("failed to create image buffer from screenshot data"))?;
+        rgba_image.save(output_path)
+            .with_context(|| format!("failed to save screenshot to {}", output_path.display()))?;
+        Ok(())
     }
 
     fn crop_metric(
