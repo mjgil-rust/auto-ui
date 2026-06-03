@@ -1,9 +1,17 @@
 use std::collections::HashSet;
+use std::ffi::c_void;
 use std::path::Path;
 use std::time::Duration;
 
 use anyhow::{bail, Result};
 use auto_ui_core::{VisualMetric, WindowDriver, WindowGeometry};
+use core_foundation::base::{CFType, TCFType};
+use core_foundation::dictionary::CFDictionary;
+use core_foundation::number::CFNumber;
+use core_foundation::string::CFString;
+use core_graphics::window::{
+    copy_window_info, kCGWindowListOptionAll, kCGWindowName, kCGWindowNumber, kCGWindowOwnerPID,
+};
 
 /// macOS-specific window driver using CoreGraphics and Accessibility APIs.
 pub struct MacOsWindowDriver;
@@ -14,6 +22,37 @@ impl MacOsWindowDriver {
     }
 }
 
+/// Retrieve all window dictionaries from CoreGraphics.
+fn window_list() -> Vec<CFDictionary<CFString, CFType>> {
+    let Some(array) = copy_window_info(kCGWindowListOptionAll, 0) else {
+        return Vec::new();
+    };
+    array
+        .iter()
+        .filter_map(|item| {
+            let ptr: *const c_void = *item;
+            let dict: CFDictionary<CFString, CFType> = unsafe { TCFType::wrap_under_get_rule(ptr.cast()) };
+            Some(dict)
+        })
+        .collect()
+}
+
+/// Extract a string value from a window dictionary.
+fn get_string(dict: &CFDictionary<CFString, CFType>, key: CFString) -> Option<String> {
+    dict.find(&key).map(|value| {
+        let s: CFString = unsafe { TCFType::wrap_under_get_rule(value.as_concrete_TypeRef().cast()) };
+        s.to_string()
+    })
+}
+
+/// Extract an i64 value from a window dictionary.
+fn get_i64(dict: &CFDictionary<CFString, CFType>, key: CFString) -> Option<i64> {
+    dict.find(&key).and_then(|value| {
+        let num: CFNumber = unsafe { TCFType::wrap_under_get_rule(value.as_concrete_TypeRef().cast()) };
+        num.to_i64()
+    })
+}
+
 impl WindowDriver for MacOsWindowDriver {
     fn check_required_tools(&self) -> Result<()> {
         // macOS requires Accessibility permissions instead of external tools.
@@ -21,41 +60,108 @@ impl WindowDriver for MacOsWindowDriver {
         Ok(())
     }
 
-    fn find_windows(&self, _title: &str) -> Result<Vec<String>> {
-        bail!("find_windows not yet implemented for macOS")
+    fn find_windows(&self, title: &str) -> Result<Vec<String>> {
+        let title_lower = title.to_lowercase();
+        let windows = window_list();
+        let mut matches = Vec::new();
+        for dict in windows {
+            if let Some(window_name) = get_string(&dict, unsafe { CFString::wrap_under_get_rule(kCGWindowName) }) {
+                if window_name.to_lowercase().contains(&title_lower) {
+                    if let Some(window_id) = get_i64(&dict, unsafe { CFString::wrap_under_get_rule(kCGWindowNumber) }) {
+                        matches.push(window_id.to_string());
+                    }
+                }
+            }
+        }
+        Ok(matches)
     }
 
-    fn find_windows_for_pid(&self, _pid: i32) -> Result<Vec<String>> {
-        bail!("find_windows_for_pid not yet implemented for macOS")
+    fn find_windows_for_pid(&self, pid: i32) -> Result<Vec<String>> {
+        let windows = window_list();
+        let mut matches = Vec::new();
+        for dict in windows {
+            if let Some(window_pid) = get_i64(&dict, unsafe { CFString::wrap_under_get_rule(kCGWindowOwnerPID) }) {
+                if window_pid == pid as i64 {
+                    if let Some(window_id) = get_i64(&dict, unsafe { CFString::wrap_under_get_rule(kCGWindowNumber) }) {
+                        matches.push(window_id.to_string());
+                    }
+                }
+            }
+        }
+        Ok(matches)
     }
 
-    fn find_window(&self, _title: &str, _timeout: Duration) -> Result<Option<String>> {
-        bail!("find_window not yet implemented for macOS")
+    fn find_window(&self, title: &str, timeout: Duration) -> Result<Option<String>> {
+        let start = std::time::Instant::now();
+        while start.elapsed() < timeout {
+            let windows = self.find_windows(title)?;
+            if let Some(id) = windows.last() {
+                return Ok(Some(id.clone()));
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        Ok(None)
     }
 
-    fn find_window_for_pid(&self, _pid: i32, _timeout: Duration) -> Result<Option<String>> {
-        bail!("find_window_for_pid not yet implemented for macOS")
+    fn find_window_for_pid(&self, pid: i32, timeout: Duration) -> Result<Option<String>> {
+        let start = std::time::Instant::now();
+        while start.elapsed() < timeout {
+            let windows = self.find_windows_for_pid(pid)?;
+            if let Some(id) = windows.last() {
+                return Ok(Some(id.clone()));
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        Ok(None)
     }
 
     fn wait_for_new_window(
         &self,
-        _title: &str,
-        _before_ids: &HashSet<String>,
-        _timeout: Duration,
+        title: &str,
+        before_ids: &HashSet<String>,
+        timeout: Duration,
     ) -> Result<Option<String>> {
-        bail!("wait_for_new_window not yet implemented for macOS")
+        let start = std::time::Instant::now();
+        while start.elapsed() < timeout {
+            let windows = self.find_windows(title)?;
+            for id in windows {
+                if !before_ids.contains(&id) {
+                    return Ok(Some(id));
+                }
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        Ok(None)
     }
 
     fn get_active_window(&self) -> Result<Option<String>> {
         bail!("get_active_window not yet implemented for macOS")
     }
 
-    fn get_window_pid(&self, _window_id: &str) -> Result<Option<i32>> {
-        bail!("get_window_pid not yet implemented for macOS")
+    fn get_window_pid(&self, window_id: &str) -> Result<Option<i32>> {
+        let target_id: i64 = window_id.parse().ok().unwrap_or(-1);
+        let windows = window_list();
+        for dict in windows {
+            if let Some(id) = get_i64(&dict, unsafe { CFString::wrap_under_get_rule(kCGWindowNumber) }) {
+                if id == target_id {
+                    return Ok(get_i64(&dict, unsafe { CFString::wrap_under_get_rule(kCGWindowOwnerPID) }).map(|p| p as i32));
+                }
+            }
+        }
+        Ok(None)
     }
 
-    fn window_exists(&self, _window_id: &str) -> Result<bool> {
-        bail!("window_exists not yet implemented for macOS")
+    fn window_exists(&self, window_id: &str) -> Result<bool> {
+        let target_id: i64 = window_id.parse().ok().unwrap_or(-1);
+        let windows = window_list();
+        for dict in windows {
+            if let Some(id) = get_i64(&dict, unsafe { CFString::wrap_under_get_rule(kCGWindowNumber) }) {
+                if id == target_id {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
     }
 
     fn get_geometry(&self, _window_id: &str) -> Result<WindowGeometry> {
@@ -138,5 +244,19 @@ mod tests {
     fn macos_window_driver_implements_window_driver_trait() {
         fn assert_trait<T: WindowDriver>() {}
         assert_trait::<MacOsWindowDriver>();
+    }
+
+    #[test]
+    fn find_windows_does_not_panic() {
+        let driver = MacOsWindowDriver::new();
+        let result = driver.find_windows("Finder");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn window_exists_does_not_panic() {
+        let driver = MacOsWindowDriver::new();
+        let result = driver.window_exists("0");
+        assert!(result.is_ok());
     }
 }
