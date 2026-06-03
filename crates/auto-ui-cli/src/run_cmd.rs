@@ -60,7 +60,8 @@ pub fn run(args: Args) -> Result<()> {
             rust_chatbot::run_named_scenario(&*driver, &scenario, scenario_file.value, output_override)?
         }
         "gpui_component_testing" => {
-            gpui::run_named_scenario(&scenario, scenario_file.value, output_override)?
+            let driver = crate::build_driver()?;
+            gpui::run_named_scenario(&*driver, &scenario, scenario_file.value, output_override)?
         }
         other => bail!(
             "Unsupported target {other:?}. Supported targets: {}.",

@@ -12,11 +12,17 @@ use auto_ui_core::WindowDriver;
 use clap::{Parser, Subcommand};
 
 /// Build the platform-specific window driver.
-/// Currently always returns an X11 driver; macOS driver will be added in Phase 4.
+/// Linux uses X11WindowDriver; macOS driver will be added in Phase 4.
+#[cfg(target_os = "linux")]
 pub fn build_driver() -> anyhow::Result<Box<dyn WindowDriver>> {
     let driver = auto_ui_driver_x11::X11WindowDriver::new();
     driver.check_required_tools()?;
     Ok(Box::new(driver))
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn build_driver() -> anyhow::Result<Box<dyn WindowDriver>> {
+    anyhow::bail!("macOS window driver is not yet implemented (Phase 4)")
 }
 
 #[derive(Parser)]

@@ -8,9 +8,8 @@ use anyhow::{bail, Context, Result};
 use auto_ui_artifacts::{write_report, Report};
 use auto_ui_core::{
     build_output_dir, expand_path, log_line, normalize_name, repo_root, request_background_launch,
-    CompletedRun,
+    CompletedRun, WindowDriver,
 };
-use auto_ui_driver_x11 as x11;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -183,6 +182,7 @@ pub fn validate_named_scenario(scenario: &str, value: &Value) -> Result<()> {
 }
 
 pub fn run_named_scenario(
+    driver: &dyn WindowDriver,
     scenario: &str,
     value: Value,
     output_override: Option<String>,
@@ -190,21 +190,21 @@ pub fn run_named_scenario(
     match normalize_name(scenario).as_str() {
         "scroll_matrix" => {
             let config = scroll_matrix_config_from_scenario(value, output_override)?;
-            run_scroll_matrix(config)
+            run_scroll_matrix(driver, config)
         }
         "scrollbar_trace" => {
             let config = scrollbar_trace_config_from_scenario(value, output_override)?;
-            run_scrollbar_trace(config)
+            run_scrollbar_trace(driver, config)
         }
         "conversation_paint" => {
             let config = conversation_paint_config_from_scenario(value, output_override)?;
-            run_conversation_paint(config)
+            run_conversation_paint(driver, config)
         }
         other => bail!("Unsupported gpui scenario {other:?}."),
     }
 }
 
-pub fn run_scroll_matrix(config: ScrollMatrixConfig) -> Result<CompletedRun> {
+pub fn run_scroll_matrix(driver: &dyn WindowDriver, config: ScrollMatrixConfig) -> Result<CompletedRun> {
     auto_ui_core::ensure_display("gpui-component-testing")?;
     let app_root = resolve_app_root(config.app_root.as_deref())?;
     let output_dir = build_output_dir(config.output_dir.as_deref(), "auto-ui-gpui-scroll-matrix")?;
@@ -298,6 +298,7 @@ pub fn run_scroll_matrix(config: ScrollMatrixConfig) -> Result<CompletedRun> {
             }
 
             run_process_with_optional_capture(
+                driver,
                 command,
                 &stdout_path,
                 &stderr_path,
@@ -405,7 +406,7 @@ pub fn run_scroll_matrix(config: ScrollMatrixConfig) -> Result<CompletedRun> {
     result
 }
 
-pub fn run_scrollbar_trace(config: ScrollbarTraceConfig) -> Result<CompletedRun> {
+pub fn run_scrollbar_trace(driver: &dyn WindowDriver, config: ScrollbarTraceConfig) -> Result<CompletedRun> {
     auto_ui_core::ensure_display("gpui-component-testing")?;
     let app_root = resolve_app_root(config.app_root.as_deref())?;
     let output_dir =
@@ -500,6 +501,7 @@ pub fn run_scrollbar_trace(config: ScrollbarTraceConfig) -> Result<CompletedRun>
         }
 
         run_process_with_optional_capture(
+            driver,
             command,
             &stdout_path,
             &stderr_path,
@@ -583,7 +585,7 @@ pub fn run_scrollbar_trace(config: ScrollbarTraceConfig) -> Result<CompletedRun>
     result
 }
 
-pub fn run_conversation_paint(config: ConversationPaintConfig) -> Result<CompletedRun> {
+pub fn run_conversation_paint(driver: &dyn WindowDriver, config: ConversationPaintConfig) -> Result<CompletedRun> {
     auto_ui_core::ensure_display("gpui-component-testing")?;
     let app_root = resolve_app_root(config.app_root.as_deref())?;
     let output_dir = build_output_dir(
@@ -680,6 +682,7 @@ pub fn run_conversation_paint(config: ConversationPaintConfig) -> Result<Complet
             }
 
             run_process_with_optional_capture(
+                driver,
                 command,
                 &stdout_path,
                 &stderr_path,
@@ -1018,6 +1021,7 @@ struct GpuiCapture {
 }
 
 fn run_process_with_optional_capture(
+    driver: &dyn WindowDriver,
     mut command: Command,
     stdout_path: &Path,
     stderr_path: &Path,
@@ -1027,7 +1031,7 @@ fn run_process_with_optional_capture(
     screenshot_path: Option<&Path>,
     timeout_ms: Option<u64>,
 ) -> Result<()> {
-    let restore_window_id = x11::get_active_window_id()?;
+    let restore_window_id = driver.get_active_window()?;
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
     let mut child = command
@@ -1035,19 +1039,19 @@ fn run_process_with_optional_capture(
         .with_context(|| "failed to start gpui process".to_string())?;
 
     thread::sleep(Duration::from_millis(settle_ms));
-    if let Some(window_id) = x11::find_window_id_for_pid(child.id() as i32, Duration::from_secs(2))?
+    if let Some(window_id) = driver.find_window_for_pid(child.id() as i32, Duration::from_secs(2))?
         .or_else(|| {
             window_title.and_then(|title| {
-                x11::find_window_id(title, Duration::from_secs(2))
+                driver.find_window(title, Duration::from_secs(2))
                     .ok()
                     .flatten()
             })
         })
     {
-        let _ = x11::background_window(&window_id, restore_window_id.as_deref());
+        let _ = driver.background(&window_id, restore_window_id.as_deref());
         if capture_window {
             if let Some(screenshot_path) = screenshot_path {
-                x11::capture_window_screenshot(&window_id, screenshot_path).with_context(|| {
+                driver.screenshot(&window_id, screenshot_path).with_context(|| {
                     format!(
                         "failed to capture screenshot to {}",
                         screenshot_path.display()
@@ -1668,7 +1672,9 @@ mod tests {
         command.arg("10");
 
         // With a 100ms timeout, this should fail
+        let driver = auto_ui_driver_x11::FakeWindowDriver::new();
         let result = run_process_with_optional_capture(
+            &driver,
             command,
             &stdout_path,
             &stderr_path,
@@ -1701,7 +1707,9 @@ mod tests {
 
         let mut command = std::process::Command::new("true");
 
+        let driver = auto_ui_driver_x11::FakeWindowDriver::new();
         let result = run_process_with_optional_capture(
+            &driver,
             command,
             &stdout_path,
             &stderr_path,
@@ -1753,7 +1761,8 @@ mod tests {
         let _guard = live_test_lock().lock().unwrap();
         require_live_opt_in();
         let output_dir = unique_temp_dir("gpui-scroll-matrix-live");
-        let completed = run_scroll_matrix(ScrollMatrixConfig {
+        let driver = auto_ui_driver_x11::X11WindowDriver::new();
+        let completed = run_scroll_matrix(&driver, ScrollMatrixConfig {
             app_root: Some(require_env("AUTO_UI_TEST_GPUI_ROOT")),
             example: "llm_chat_story_style_bench_demo".to_string(),
             variants: vec!["plain_text".to_string()],
@@ -1780,7 +1789,8 @@ mod tests {
         let _guard = live_test_lock().lock().unwrap();
         require_live_opt_in();
         let output_dir = unique_temp_dir("gpui-scrollbar-live");
-        let completed = run_scrollbar_trace(ScrollbarTraceConfig {
+        let driver = auto_ui_driver_x11::X11WindowDriver::new();
+        let completed = run_scrollbar_trace(&driver, ScrollbarTraceConfig {
             app_root: Some(require_env("AUTO_UI_TEST_GPUI_ROOT")),
             example: "llm_chat_story_style_scrollbar_demo".to_string(),
             run_ms: 800,
@@ -1806,7 +1816,8 @@ mod tests {
         let _guard = live_test_lock().lock().unwrap();
         require_live_opt_in();
         let output_dir = unique_temp_dir("gpui-conversation-live");
-        let completed = run_conversation_paint(ConversationPaintConfig {
+        let driver = auto_ui_driver_x11::X11WindowDriver::new();
+        let completed = run_conversation_paint(&driver, ConversationPaintConfig {
             app_root: Some(require_env("AUTO_UI_TEST_GPUI_ROOT")),
             example: "llm_chat_conversation_bench_demo".to_string(),
             threads: vec![0],
@@ -2082,7 +2093,8 @@ exit 0
             command_cwd: None,
         };
 
-        let completed = run_scroll_matrix(config).expect("run_scroll_matrix should succeed");
+        let driver = auto_ui_driver_x11::FakeWindowDriver::new();
+        let completed = run_scroll_matrix(&driver, config).expect("run_scroll_matrix should succeed");
 
         // Read the report and verify artifacts
         let report = read_report_artifacts(&completed.report_path);
@@ -2148,7 +2160,8 @@ exit 0
             command_cwd: None,
         };
 
-        let completed = run_scrollbar_trace(config).expect("run_scrollbar_trace should succeed");
+        let driver = auto_ui_driver_x11::FakeWindowDriver::new();
+        let completed = run_scrollbar_trace(&driver, config).expect("run_scrollbar_trace should succeed");
 
         // Read the report and verify artifacts
         let report = read_report_artifacts(&completed.report_path);
@@ -2215,8 +2228,9 @@ exit 0
             command_cwd: None,
         };
 
+        let driver = auto_ui_driver_x11::FakeWindowDriver::new();
         let completed =
-            run_conversation_paint(config).expect("run_conversation_paint should succeed");
+            run_conversation_paint(&driver, config).expect("run_conversation_paint should succeed");
 
         // Read the report and verify artifacts
         let report = read_report_artifacts(&completed.report_path);
@@ -2288,7 +2302,8 @@ exit 0
             command_cwd: None,
         };
 
-        let completed = run_scroll_matrix(config).expect("run_scroll_matrix should succeed");
+        let driver = auto_ui_driver_x11::FakeWindowDriver::new();
+        let completed = run_scroll_matrix(&driver, config).expect("run_scroll_matrix should succeed");
 
         // Read the report and verify window_screenshot artifact is registered
         let report = read_report_artifacts(&completed.report_path);

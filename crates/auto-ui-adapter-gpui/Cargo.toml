@@ -7,7 +7,9 @@ edition.workspace = true
 anyhow.workspace = true
 auto-ui-artifacts = { path = "../auto-ui-artifacts" }
 auto-ui-core = { path = "../auto-ui-core" }
-auto-ui-driver-x11 = { path = "../auto-ui-driver-x11" }
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
+
+[dev-dependencies]
+auto-ui-driver-x11 = { path = "../auto-ui-driver-x11" }
