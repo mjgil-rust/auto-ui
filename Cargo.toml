@@ -4,6 +4,7 @@ members = [
     "crates/auto-ui-core",
     "crates/auto-ui-artifacts",
     "crates/auto-ui-driver-x11",
+    "crates/auto-ui-driver-macos",
     "crates/auto-ui-adapter-rust-chatbot",
     "crates/auto-ui-adapter-gpui",
 ]
