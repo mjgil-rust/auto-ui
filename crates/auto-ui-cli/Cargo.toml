@@ -23,5 +23,8 @@ tracing-subscriber.workspace = true
 [target.'cfg(target_os = "linux")'.dependencies]
 auto-ui-driver-x11 = { path = "../auto-ui-driver-x11" }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+auto-ui-driver-macos = { path = "../auto-ui-driver-macos" }
+
 [dev-dependencies]
 tempfile.workspace = true

@@ -511,8 +511,17 @@ pub fn log_line(message: impl AsRef<str>, progress_path: Option<&Path>) -> Resul
 }
 
 pub fn ensure_display(app_name: &str) -> Result<()> {
-    if env::var_os("DISPLAY").is_none() {
-        bail!("DISPLAY is not set. Run this from a desktop terminal in the same X session as {app_name}.");
+    #[cfg(target_os = "linux")]
+    {
+        if env::var_os("DISPLAY").is_none() {
+            bail!("DISPLAY is not set. Run this from a desktop terminal in the same X session as {app_name}.");
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        if env::var_os("SSH_CONNECTION").is_some() {
+            bail!("Running over SSH. Run this from a local desktop terminal with {app_name} visible.");
+        }
     }
     Ok(())
 }

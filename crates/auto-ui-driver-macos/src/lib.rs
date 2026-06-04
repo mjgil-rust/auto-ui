@@ -1,3 +1,5 @@
+#![cfg(target_os = "macos")]
+
 use std::collections::HashSet;
 use std::ffi::c_void;
 use std::path::Path;

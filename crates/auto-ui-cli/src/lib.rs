@@ -20,9 +20,16 @@ pub fn build_driver() -> anyhow::Result<Box<dyn WindowDriver>> {
     Ok(Box::new(driver))
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "macos")]
 pub fn build_driver() -> anyhow::Result<Box<dyn WindowDriver>> {
-    anyhow::bail!("macOS window driver is not yet implemented (Phase 4)")
+    let driver = auto_ui_driver_macos::MacOsWindowDriver::new();
+    driver.check_required_tools()?;
+    Ok(Box::new(driver))
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+pub fn build_driver() -> anyhow::Result<Box<dyn WindowDriver>> {
+    anyhow::bail!("unsupported platform: only Linux and macOS are supported")
 }
 
 #[derive(Parser)]
