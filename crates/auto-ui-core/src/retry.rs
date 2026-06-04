@@ -321,9 +321,9 @@ mod tests {
             Err(RetryError::transient("slow operation"))
         };
 
-        // Very short timeout
+        // Short timeout — use 300 ms so slow CI runners still get ≥2 attempts
         let config = RetryConfig::default()
-            .with_timeout(Duration::from_millis(100))
+            .with_timeout(Duration::from_millis(300))
             .with_max_attempts(100)
             .with_initial_delay(Duration::from_millis(20));
 

@@ -42,7 +42,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y openbox
 
       - name: Run unit/integration tests
-        run: cargo test --workspace -- --test-threads=4
+        run: xvfb-run cargo test --workspace -- --test-threads=4
 
       - name: Build release
         run: cargo build --release --workspace
