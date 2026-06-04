@@ -17,3 +17,6 @@ tracing.workspace = true
 
 [dev-dependencies]
 auto-ui-driver-x11 = { path = "../auto-ui-driver-x11" }
+
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+auto-ui-driver-macos = { path = "../auto-ui-driver-macos" }

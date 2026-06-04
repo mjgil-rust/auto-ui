@@ -217,6 +217,7 @@ mod tests {
     // ============================================================
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn headless_display_kills_xvfb_on_drop() {
         // After HeadlessDisplay is dropped, Xvfb should be dead
         let hd = HeadlessDisplay::start("800x600x24").expect("headless display should start");
@@ -257,6 +258,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn headless_display_kills_openbox_on_drop() {
         // After HeadlessDisplay is dropped, openbox should be dead
         let hd = HeadlessDisplay::start("800x600x24").expect("headless display should start");
@@ -287,6 +289,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn headless_display_display_is_usable() {
         // DISPLAY must be parseable as :N
         let hd = HeadlessDisplay::start("800x600x24").expect("headless display should start");
@@ -377,6 +380,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn headless_display_display_number_in_range() {
         // Display number should be in the expected range (80-99)
         let hd = HeadlessDisplay::start("800x600x24").expect("headless display should start");
@@ -392,6 +396,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn headless_display_clean_exit_code_xvfb() {
         // Xvfb should exit cleanly when HeadlessDisplay drops
         let hd = HeadlessDisplay::start("800x600x24").expect("headless display should start");
@@ -513,6 +518,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn headless_display_impl_drop_is_called() {
         // HeadlessDisplay should implement Drop so it cleans up on scope exit
         let hd = HeadlessDisplay::start("800x600x24").expect("headless display should start");
@@ -556,6 +562,7 @@ mod tests {
     // ============================================================
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn openbox_pid_is_valid_during_operation() {
         // openbox PID must be non-zero and the process must be responsive
         let hd = HeadlessDisplay::start("800x600x24").expect("headless display should start");
@@ -638,6 +645,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn openbox_dies_after_drop() {
         // After HeadlessDisplay drops, openbox must be dead
         let hd = HeadlessDisplay::start("800x600x24").expect("headless display should start");
@@ -752,6 +760,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn openbox_clean_exit_on_drop_no_zombie() {
         // After drop, openbox should be completely dead (not a zombie)
         let hd = HeadlessDisplay::start("800x600x24").expect("headless display should start");

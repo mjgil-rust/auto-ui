@@ -1,4 +1,7 @@
 use super::*;
+use std::sync::Mutex;
+
+static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 fn unique_temp_dir(name: &str) -> PathBuf {
     let nanos = std::time::SystemTime::now()
@@ -57,9 +60,14 @@ fn newest_trace_log_returns_newest_by_lexicographic_order() {
 
 #[test]
 fn newest_trace_log_since_finds_newly_modified_log() {
+    let _guard = ENV_LOCK.lock().unwrap();
     let temp = unique_temp_dir("trace-log-since");
-    let log_dir = temp.join("logs");
+    let log_dir = temp.join("rust-chatbot");
     fs::create_dir_all(&log_dir).unwrap();
+
+    // Point XDG_STATE_HOME at our temp dir so rust_chatbot_log_dir() is hermetic
+    let old_xdg = std::env::var_os("XDG_STATE_HOME");
+    std::env::set_var("XDG_STATE_HOME", &temp);
 
     // Create an old log file
     let old_path = log_dir.join("rust-chatbot.log.1");
@@ -75,24 +83,35 @@ fn newest_trace_log_since_finds_newly_modified_log() {
     let new_path = log_dir.join("rust-chatbot.log.2");
     fs::write(&new_path, "new content").unwrap();
 
-    // Set the mtime of the new file to be after reference
-    let newer_time = std::time::SystemTime::now();
-    let _ = newer_time; // Used implicitly via comparison in the function
+    // Ensure the new file's mtime is strictly after reference
+    thread::sleep(std::time::Duration::from_millis(50));
 
     let result = newest_trace_log_since(reference);
     assert!(
         result.is_ok(),
-        "should find a log file modified after reference"
+        "should find a log file modified after reference: {:?}",
+        result.err()
     );
 
+    // Restore env
+    match old_xdg {
+        Some(v) => std::env::set_var("XDG_STATE_HOME", v),
+        None => std::env::remove_var("XDG_STATE_HOME"),
+    }
     fs::remove_dir_all(temp).ok();
+    drop(_guard);
 }
 
 #[test]
 fn newest_trace_log_since_falls_back_when_no_newer_logs() {
+    let _guard = ENV_LOCK.lock().unwrap();
     let temp = unique_temp_dir("trace-log-fallback");
-    let log_dir = temp.join("logs");
+    let log_dir = temp.join("rust-chatbot");
     fs::create_dir_all(&log_dir).unwrap();
+
+    // Point XDG_STATE_HOME at our temp dir so rust_chatbot_log_dir() is hermetic
+    let old_xdg = std::env::var_os("XDG_STATE_HOME");
+    std::env::set_var("XDG_STATE_HOME", &temp);
 
     // Create only old log files (before reference time)
     let old_path = log_dir.join("rust-chatbot.log.1");
@@ -103,6 +122,17 @@ fn newest_trace_log_since_falls_back_when_no_newer_logs() {
 
     let result = newest_trace_log_since(far_future);
     // Should fall back to newest_trace_log since nothing is newer
-    assert!(result.is_ok());
+    assert!(
+        result.is_ok(),
+        "fallback to newest_trace_log failed: {:?}",
+        result.err()
+    );
+
+    // Restore env
+    match old_xdg {
+        Some(v) => std::env::set_var("XDG_STATE_HOME", v),
+        None => std::env::remove_var("XDG_STATE_HOME"),
+    }
     fs::remove_dir_all(temp).ok();
+    drop(_guard);
 }

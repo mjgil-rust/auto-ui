@@ -122,6 +122,7 @@ dependencies = [
  "anyhow",
  "auto-ui-artifacts",
  "auto-ui-core",
+ "auto-ui-driver-macos",
  "auto-ui-driver-x11",
  "chrono",
  "clap",

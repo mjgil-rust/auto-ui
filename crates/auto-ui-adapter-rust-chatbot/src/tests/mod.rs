@@ -29,6 +29,26 @@ fn require_live_opt_in() {
     );
 }
 
+fn build_test_driver() -> Box<dyn auto_ui_core::WindowDriver> {
+    #[cfg(target_os = "linux")]
+    {
+        let driver = auto_ui_driver_x11::X11WindowDriver::new();
+        driver.check_required_tools().expect("x11 tools missing");
+        Box::new(driver)
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let driver = auto_ui_driver_macos::MacOsWindowDriver::new();
+        // Accessibility check may fail in test runners; AppleScript still works
+        let _ = driver.check_required_tools();
+        Box::new(driver)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        panic!("live tests only supported on Linux and macOS")
+    }
+}
+
 fn provider_from_env() -> Provider {
     match std::env::var("AUTO_UI_TEST_RUST_CHATBOT_PROVIDER")
         .unwrap_or_else(|_| "codex".to_string())
@@ -273,14 +293,14 @@ fn resolve_app_root_prefers_rust_chatbot_app_root_over_rust_chatbot_root() {
 }
 
 #[test]
-#[ignore = "requires DISPLAY, built rust-chatbot binaries, and AUTO_UI_RUN_LIVE_TESTS=1"]
+#[ignore = "requires built rust-chatbot binaries, valid session, and AUTO_UI_RUN_LIVE_TESTS=1"]
 fn live_debug_single_session_smoke() {
     let _guard = live_test_lock().lock().unwrap();
     require_live_opt_in();
     let output_dir = unique_temp_dir("rust-chatbot-debug-live");
-    let driver = auto_ui_driver_x11::X11WindowDriver::new();
+    let driver = build_test_driver();
     let completed = run_debug(
-        &driver,
+        &*driver,
         DebugConfig {
             app_root: Some(require_env("AUTO_UI_TEST_RUST_CHATBOT_ROOT")),
             provider: provider_from_env(),
@@ -303,14 +323,14 @@ fn live_debug_single_session_smoke() {
 }
 
 #[test]
-#[ignore = "requires DISPLAY, built rust-chatbot binaries, and AUTO_UI_RUN_LIVE_TESTS=1"]
+#[ignore = "requires built rust-chatbot binaries, valid session, and AUTO_UI_RUN_LIVE_TESTS=1"]
 fn live_header_debug_single_session_smoke() {
     let _guard = live_test_lock().lock().unwrap();
     require_live_opt_in();
     let output_dir = unique_temp_dir("rust-chatbot-header-live");
-    let driver = auto_ui_driver_x11::X11WindowDriver::new();
+    let driver = build_test_driver();
     let completed = run_header_debug(
-        &driver,
+        &*driver,
         HeaderDebugConfig {
             app_root: Some(require_env("AUTO_UI_TEST_RUST_CHATBOT_ROOT")),
             provider: provider_from_env(),
@@ -333,14 +353,14 @@ fn live_header_debug_single_session_smoke() {
 }
 
 #[test]
-#[ignore = "requires DISPLAY, built rust-chatbot binaries, and AUTO_UI_RUN_LIVE_TESTS=1"]
+#[ignore = "requires built rust-chatbot binaries, valid session, and AUTO_UI_RUN_LIVE_TESTS=1"]
 fn live_prompt_debug_single_session_smoke() {
     let _guard = live_test_lock().lock().unwrap();
     require_live_opt_in();
     let output_dir = unique_temp_dir("rust-chatbot-prompt-live");
-    let driver = auto_ui_driver_x11::X11WindowDriver::new();
+    let driver = build_test_driver();
     let completed = run_prompt_debug(
-        &driver,
+        &*driver,
         PromptDebugConfig {
             app_root: Some(require_env("AUTO_UI_TEST_RUST_CHATBOT_ROOT")),
             provider: provider_from_env(),
