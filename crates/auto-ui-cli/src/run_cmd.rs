@@ -34,6 +34,11 @@ pub struct Args {
 }
 
 pub fn run(args: Args) -> Result<()> {
+    #[cfg(target_os = "macos")]
+    if args.headless {
+        bail!("--headless is not supported on macOS. Run from a local desktop session.");
+    }
+    #[cfg(not(target_os = "macos"))]
     let _headless = if args.headless {
         Some(HeadlessDisplay::start(&args.geometry)?)
     } else {
