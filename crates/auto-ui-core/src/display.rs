@@ -153,8 +153,8 @@ impl Drop for HeadlessDisplay {
         thread::sleep(Duration::from_millis(100));
 
         // Clean up lock file
-        if display.starts_with(':') {
-            if let Ok(num) = display[1..].parse::<u32>() {
+        if let Some(rest) = display.strip_prefix(':') {
+            if let Ok(num) = rest.parse::<u32>() {
                 let lock_path = format!("/tmp/.X{num}-lock");
                 let _ = std::fs::remove_file(&lock_path);
             }
@@ -304,9 +304,9 @@ mod tests {
         // HeadlessDisplay should accept various geometry strings
         // Note: 1920x1080x32 may not be supported in all environments (depth 32 is rare)
         for geometry in &["1280x800x24", "1024x768x16"] {
-            let hd = HeadlessDisplay::start(geometry).expect(&format!(
-                "headless display should start with geometry {geometry}"
-            ));
+            let hd = HeadlessDisplay::start(geometry).unwrap_or_else(|_| {
+                panic!("headless display should start with geometry {geometry}")
+            });
             assert!(hd.display().starts_with(':'));
             drop(hd);
             thread::sleep(Duration::from_millis(200));
@@ -366,7 +366,7 @@ mod tests {
     #[ignore = "requires Xvfb and openbox installed"]
     fn headless_display_removes_env_on_drop() {
         // After drop, DISPLAY should be restored or cleared
-        let old_display = env::var("DISPLAY").ok();
+        let _old_display = env::var("DISPLAY").ok();
         {
             let hd = HeadlessDisplay::start("800x600x24").expect("headless display should start");
             let _ = hd.display();
@@ -536,7 +536,7 @@ mod tests {
     fn headless_display_window_manager_running() {
         // openbox should be detectable via wmctrl while HeadlessDisplay is alive
         let hd = HeadlessDisplay::start("800x600x24").expect("headless display should start");
-        let display = hd.display();
+        let _display = hd.display();
 
         // wmctrl should list the openbox root window
         let output = Command::new("wmctrl")
@@ -802,9 +802,9 @@ mod tests {
     fn openbox_with_different_geometries() {
         // openbox should work correctly with different Xvfb geometries
         for geometry in &["800x600x24", "1024x768x16", "1920x1080x24"] {
-            let hd = HeadlessDisplay::start(geometry).expect(&format!(
-                "headless display should start with geometry {geometry}"
-            ));
+            let hd = HeadlessDisplay::start(geometry).unwrap_or_else(|_| {
+                panic!("headless display should start with geometry {geometry}")
+            });
             let openbox_pid = hd.openbox.id();
             assert!(
                 openbox_pid > 0,

@@ -5,7 +5,6 @@
 
 use std::collections::BTreeMap;
 use std::env;
-use std::path::PathBuf;
 
 /// Environment variables that should never be logged.
 const SENSITIVE_ENV_VARS: &[&str] = &[
@@ -70,7 +69,7 @@ pub fn redact_command_args(args: &[String]) -> Vec<String> {
 }
 
 /// Sanitizes a path for logging by replacing home directory with ~.
-pub fn sanitize_path_for_log(path: &PathBuf) -> String {
+pub fn sanitize_path_for_log(path: &std::path::Path) -> String {
     if let Ok(home) = env::var("HOME") {
         if let Some(stripped) = path.to_string_lossy().strip_prefix(&home) {
             return format!("~{}", stripped);
@@ -81,7 +80,7 @@ pub fn sanitize_path_for_log(path: &PathBuf) -> String {
 
 /// Sanitizes current directory for logging.
 pub fn sanitize_cwd_for_log() -> String {
-    sanitize_path_for_log(&PathBuf::from(env::current_dir().unwrap_or_default()))
+    sanitize_path_for_log(&env::current_dir().unwrap_or_default())
 }
 
 /// Formats launch info for logging: command, redacted env overrides, and cwd.
@@ -110,6 +109,8 @@ pub fn format_launch_info_for_log(
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::*;
 
     #[test]

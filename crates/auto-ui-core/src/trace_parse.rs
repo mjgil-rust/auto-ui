@@ -228,6 +228,6 @@ mod tests {
         // The regex captures until whitespace or end, so embedded quotes become part of value
         assert_eq!(fields.get("session_id"), Some(&"abc".to_string()));
         // Path value includes the embedded quotes
-        assert!(fields.get("path").is_some());
+        assert!(fields.contains_key("path"));
     }
 }

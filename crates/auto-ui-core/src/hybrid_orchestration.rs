@@ -17,21 +17,12 @@ use crate::{
 /// Configuration for hybrid orchestration.
 ///
 /// Combines startup-driven and interactive window configuration.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct HybridOrchestrationConfig {
     /// Startup orchestration configuration.
     pub startup_config: StartupOrchestrationConfig,
     /// Interactive window configuration.
     pub interactive_config: InteractiveOrchestrationConfig,
-}
-
-impl Default for HybridOrchestrationConfig {
-    fn default() -> Self {
-        Self {
-            startup_config: StartupOrchestrationConfig::default(),
-            interactive_config: InteractiveOrchestrationConfig::default(),
-        }
-    }
 }
 
 impl HybridOrchestrationConfig {

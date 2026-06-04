@@ -3,7 +3,7 @@
 //! These tests verify that example TOML files are valid and that
 //! documented commands match the actual CLI surface.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn example_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -14,7 +14,7 @@ fn example_dir() -> PathBuf {
         .join("examples")
 }
 
-fn parse_and_validate(path: &PathBuf) -> Result<(), String> {
+fn parse_and_validate(path: &Path) -> Result<(), String> {
     let scenario_file = auto_ui_core::parse_scenario_file(path).map_err(|e| e.to_string())?;
     let target = auto_ui_core::normalize_name(&scenario_file.target);
     let scenario = auto_ui_core::normalize_name(&scenario_file.scenario);

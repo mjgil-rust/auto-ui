@@ -45,7 +45,6 @@ mod tests {
     use super::*;
     use auto_ui_artifacts::Report;
     use std::fs::File;
-    use std::io::Write;
 
     fn create_test_report() -> (std::path::PathBuf, tempfile::TempDir) {
         let temp = tempfile::TempDir::new().unwrap();

@@ -24,6 +24,12 @@ impl MacOsWindowDriver {
     }
 }
 
+impl Default for MacOsWindowDriver {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Retrieve all window dictionaries from CoreGraphics.
 fn window_list() -> Vec<CFDictionary<CFString, CFType>> {
     let Some(array) = copy_window_info(kCGWindowListOptionAll, 0) else {
@@ -31,10 +37,9 @@ fn window_list() -> Vec<CFDictionary<CFString, CFType>> {
     };
     array
         .iter()
-        .filter_map(|item| {
+        .map(|item| {
             let ptr: *const c_void = *item;
-            let dict: CFDictionary<CFString, CFType> = unsafe { TCFType::wrap_under_get_rule(ptr.cast()) };
-            Some(dict)
+            unsafe { TCFType::wrap_under_get_rule(ptr.cast()) }
         })
         .collect()
 }

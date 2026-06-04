@@ -3,7 +3,9 @@ use std::path::PathBuf;
 use anyhow::{bail, Result};
 use auto_ui_adapter_gpui as gpui;
 use auto_ui_adapter_rust_chatbot as rust_chatbot;
-use auto_ui_core::{normalize_name, parse_scenario_file, HeadlessDisplay};
+#[cfg(not(target_os = "macos"))]
+use auto_ui_core::HeadlessDisplay;
+use auto_ui_core::{normalize_name, parse_scenario_file};
 use clap::Args as ClapArgs;
 
 const SUPPORTED_TARGETS: &[&str] = &["rust_chatbot", "gpui_component_testing"];
@@ -265,7 +267,7 @@ mod tests {
             let entry = entry.unwrap();
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("toml") {
-                let relative = path.strip_prefix(&repo_root()).unwrap();
+                let relative = path.strip_prefix(repo_root()).unwrap();
                 validate_example(relative.to_str().unwrap()).unwrap();
             }
         }

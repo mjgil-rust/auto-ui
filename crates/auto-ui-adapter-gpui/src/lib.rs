@@ -392,8 +392,8 @@ pub fn run_scroll_matrix(driver: &dyn WindowDriver, config: ScrollMatrixConfig) 
     })();
 
     // Write report on failure (success path writes it inside the closure)
-    if result.is_err() {
-        let err_msg = result.as_ref().unwrap_err().to_string();
+    if let Err(err) = &result {
+        let err_msg = err.to_string();
         report.finish_error(&err_msg);
         if let Err(err) = write_report(&output_dir_for_report, &report) {
             let _ = log_line(
@@ -571,8 +571,8 @@ pub fn run_scrollbar_trace(driver: &dyn WindowDriver, config: ScrollbarTraceConf
     })();
 
     // Write report on failure (success path writes it inside the closure)
-    if result.is_err() {
-        let err_msg = result.as_ref().unwrap_err().to_string();
+    if let Err(err) = &result {
+        let err_msg = err.to_string();
         report.finish_error(&err_msg);
         if let Err(err) = write_report(&output_dir_for_report, &report) {
             let _ = log_line(
@@ -776,8 +776,8 @@ pub fn run_conversation_paint(driver: &dyn WindowDriver, config: ConversationPai
     })();
 
     // Write report on failure (success path writes it inside the closure)
-    if result.is_err() {
-        let err_msg = result.as_ref().unwrap_err().to_string();
+    if let Err(err) = &result {
+        let err_msg = err.to_string();
         report.finish_error(&err_msg);
         if let Err(err) = write_report(&output_dir_for_error_report, &report) {
             let _ = log_line(
@@ -1020,6 +1020,7 @@ struct GpuiCapture {
     settle_ms: Option<u64>,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_process_with_optional_capture(
     driver: &dyn WindowDriver,
     mut command: Command,
@@ -1062,13 +1063,12 @@ fn run_process_with_optional_capture(
     }
 
     // Wait for process with optional timeout
-    let timed_out: bool;
     let exit_status = if let Some(timeout) = timeout_ms {
         let start = std::time::Instant::now();
         let timeout_duration = Duration::from_millis(timeout);
         loop {
             match child.try_wait() {
-                Ok(Some(status)) => {
+                Ok(Some(_status)) => {
                     // Process exited normally - capture output via wait_with_output()
                     // Note: try_wait reaps the process but we need to call wait_with_output
                     // to get the output from the pipes
@@ -1079,7 +1079,6 @@ fn run_process_with_optional_capture(
                         .with_context(|| format!("failed to write {}", stdout_path.display()))?;
                     fs::write(stderr_path, &output.stderr)
                         .with_context(|| format!("failed to write {}", stderr_path.display()))?;
-                    timed_out = false;
                     break output.status;
                 }
                 Ok(None) => {
@@ -1095,7 +1094,6 @@ fn run_process_with_optional_capture(
                                 format!("failed to write {}", stderr_path.display())
                             })?;
                         }
-                        timed_out = true;
                         bail!("process timed out after {}ms", timeout);
                     }
                     thread::sleep(Duration::from_millis(50));
@@ -1113,7 +1111,6 @@ fn run_process_with_optional_capture(
             .with_context(|| format!("failed to write {}", stdout_path.display()))?;
         fs::write(stderr_path, &output.stderr)
             .with_context(|| format!("failed to write {}", stderr_path.display()))?;
-        timed_out = false;
         output.status
     };
 
@@ -1665,7 +1662,7 @@ mod tests {
         let temp = unique_temp_dir("process-timeout-test");
         let stdout_path = temp.join("stdout.log");
         let stderr_path = temp.join("stderr.log");
-        let screenshot_path = temp.join("screenshot.png");
+        let _screenshot_path = temp.join("screenshot.png");
 
         // Spawn a command that sleeps for 10 seconds
         let mut command = std::process::Command::new("sleep");
@@ -1705,7 +1702,7 @@ mod tests {
         let stdout_path = temp.join("stdout.log");
         let stderr_path = temp.join("stderr.log");
 
-        let mut command = std::process::Command::new("true");
+        let command = std::process::Command::new("true");
 
         let driver = auto_ui_driver_x11::FakeWindowDriver::new();
         let result = run_process_with_optional_capture(
@@ -1728,8 +1725,8 @@ mod tests {
     fn run_process_injects_env_vars() {
         // Test that env vars are correctly injected into the spawned process
         let temp = unique_temp_dir("env-var-test");
-        let stdout_path = temp.join("stdout.log");
-        let stderr_path = temp.join("stderr.log");
+        let _stdout_path = temp.join("stdout.log");
+        let _stderr_path = temp.join("stderr.log");
 
         // The run_process_with_optional_capture writes empty stdout on success.
         // To properly test env vars, we spawn a process directly with env vars

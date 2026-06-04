@@ -147,7 +147,6 @@ impl InteractiveWindowOrchestrator {
             y: 0,
             width: 800,
             height: 600,
-            ..Default::default()
         };
 
         Ok(WindowState {

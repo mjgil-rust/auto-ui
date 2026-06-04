@@ -98,19 +98,14 @@ pub enum ExecutionMode {
 }
 
 /// Status of a run execution.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum RunStatus {
+    #[default]
     Pending,
     Running,
     Completed,
     Error,
-}
-
-impl Default for RunStatus {
-    fn default() -> Self {
-        RunStatus::Pending
-    }
 }
 
 /// Request to execute a scenario run.
@@ -661,13 +656,13 @@ pub fn parse_scenario_file(path: &Path) -> Result<ScenarioFile> {
 
     // Strip top-level metadata fields that are not adapter-specific config
     let mut adapter_value = json_value.clone();
-    adapter_value.as_object_mut().map(|obj| {
+    if let Some(obj) = adapter_value.as_object_mut() {
         obj.remove("version");
         obj.remove("target");
         obj.remove("scenario");
         obj.remove("mode");
         obj.remove("output_dir");
-    });
+    }
 
     Ok(ScenarioFile {
         version,
@@ -1645,7 +1640,7 @@ mode = "super_fast_mode"
             self.scenarios.clone()
         }
 
-        fn prepare(&self, ctx: &AdapterContext, spec: &ScenarioSpec) -> Result<PreparedRun> {
+        fn prepare(&self, ctx: &AdapterContext, _spec: &ScenarioSpec) -> Result<PreparedRun> {
             Ok(PreparedRun {
                 strategy: LaunchStrategy::ManagedProcess {
                     command: CommandSpec::new(ctx.app_root.join("bin/target")),
@@ -1657,7 +1652,7 @@ mode = "super_fast_mode"
             })
         }
 
-        fn launch(&self, ctx: &AdapterContext, prepared: &PreparedRun) -> Result<LaunchedRun> {
+        fn launch(&self, _ctx: &AdapterContext, prepared: &PreparedRun) -> Result<LaunchedRun> {
             Ok(LaunchedRun {
                 pid: Some(42),
                 window_id: None,
@@ -1666,11 +1661,11 @@ mode = "super_fast_mode"
             })
         }
 
-        fn collect(&self, ctx: &AdapterContext, run: &LaunchedRun) -> Result<CollectedData> {
+        fn collect(&self, _ctx: &AdapterContext, _run: &LaunchedRun) -> Result<CollectedData> {
             Ok(CollectedData::default())
         }
 
-        fn stop(&self, ctx: &AdapterContext, run: &LaunchedRun) -> Result<()> {
+        fn stop(&self, _ctx: &AdapterContext, _run: &LaunchedRun) -> Result<()> {
             Ok(())
         }
     }

@@ -366,8 +366,8 @@ pub fn run_header_debug(driver: &dyn WindowDriver, config: HeaderDebugConfig) ->
     })();
 
     // Write report on failure (success path writes it inside the closure)
-    if result.is_err() {
-        let err_msg = result.as_ref().unwrap_err().to_string();
+    if let Err(err) = &result {
+        let err_msg = err.to_string();
         report.finish_error(&err_msg);
         if let Err(err) = write_report(&output_dir_for_error_report, &report) {
             let _ = log_line(

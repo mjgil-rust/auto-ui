@@ -35,7 +35,7 @@ mod tests {
         // Just verify init runs without panicking.
         // Note: init() may be called multiple times in tests (once per test),
         // but tracing-subscriber handles this gracefully.
-        let _ = super::init();
+        super::init();
         info!("logging initialized successfully");
     }
 

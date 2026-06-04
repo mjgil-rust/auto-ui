@@ -1,10 +1,11 @@
+#[allow(clippy::too_many_arguments)]
 fn run_width_session(
     driver: &dyn WindowDriver,
     config: &DebugConfig,
-    app_root: &PathBuf,
+    app_root: &Path,
     title: &str,
-    log_path: &PathBuf,
-    progress_path: &PathBuf,
+    log_path: &Path,
+    progress_path: &Path,
     desktop_window_id: Option<&str>,
     per_session_launch_mode: bool,
     window_id: &Option<String>,
@@ -12,7 +13,7 @@ fn run_width_session(
     width: u32,
     session: &SessionEntry,
     log_offset: &mut u64,
-    output_dir: &PathBuf,
+    output_dir: &Path,
     report: &mut Report,
 ) -> Result<Value> {
     let mut launched_pid: Option<i32> = None;
@@ -233,7 +234,7 @@ fn run_width_session(
         } else if let Err(err) = stop_result {
             let _ = log_line(
                 format!("warning: failed to stop launched_pid={launched_pid}: {err:#}"),
-                Some(&progress_path),
+                Some(progress_path),
             );
         }
     }
@@ -350,6 +351,6 @@ fn newest_trace_log_since(reference_time: std::time::SystemTime) -> Result<PathB
         // Fall back to any trace log if nothing was modified after reference time
         return newest_trace_log();
     }
-    candidates.sort_by(|a, b| b.1.cmp(&a.1)); // Sort by modified time, newest first
+    candidates.sort_by_key(|b| std::cmp::Reverse(b.1)); // Sort by modified time, newest first
     Ok(candidates.into_iter().next().unwrap().0)
 }

@@ -364,6 +364,7 @@ fn wait_for_pid_exit(app_root: &Path, pid: i32, timeout: Duration) -> Result<()>
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn launch_targeted_session_window(
     driver: &dyn WindowDriver,
     app_root: &Path,
@@ -401,8 +402,7 @@ fn launch_targeted_session_window(
         }
         None => {
             log_line(
-                "no new PID detected from chatbot-ctl pids; falling back to window-based launch detection"
-                    .to_string(),
+                "no new PID detected from chatbot-ctl pids; falling back to window-based launch detection",
                 progress_path,
             )?;
             driver.wait_for_new_window(title, &existing_window_ids, window_timeout)?
@@ -671,12 +671,12 @@ fn wait_for_trace_bundle(
             }
         }
 
-        if last_ui_match.is_some() {
+        if let Some(ref last_ui_match) = last_ui_match {
             if saw_new_relevant_line {
                 quiet_deadline = Some(Instant::now() + quiet);
             } else if let Some(quiet_deadline) = quiet_deadline {
                 if Instant::now() >= quiet_deadline {
-                    return Ok((current_offset, last_ui_match.unwrap(), code_blocks));
+                    return Ok((current_offset, last_ui_match.clone(), code_blocks));
                 }
             }
         }
