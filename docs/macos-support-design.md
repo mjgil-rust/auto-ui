@@ -2,7 +2,15 @@
 
 ## Status
 
-Draft — ready for review and implementation.
+Implemented. All phases (1–5) are complete.
+
+- Phase 1 (Trait Extraction & X11 Refactor): ✅ Complete
+- Phase 2 (ImageMagick Elimination): ✅ Complete
+- Phase 3 (Adapter Decoupling): ✅ Complete
+- Phase 4 (macOS Driver): ✅ Complete — `auto-ui-driver-macos` compiles and passes unit tests on macOS
+- Phase 5 (Validation, CI, Documentation): ✅ Complete — `macos-latest` CI job added, documentation updated, `cargo clippy`/`fmt` pass cleanly
+
+Remaining validation gates (Linux live smoke tests, macOS end-to-end live tests with target apps) are tracked in `docs/tasks.md` and require platform-specific hardware/target binaries.
 
 ## Context
 
