@@ -15,9 +15,10 @@ This guide covers common issues when running `auto-ui` and how to resolve them.
 
 ## Missing Tools
 
-`auto-ui` requires: `xdotool`, `wmctrl`, ImageMagick (`import`, `convert`, `identify`).
+### Linux
 
-**Error:** `failed to find/install tool`
+`auto-ui` requires: `xdotool`, `wmctrl`, and ImageMagick `import`.
+
 **Error:** `xdotool not found`
 **Error:** `import: command not found`
 
@@ -29,6 +30,19 @@ sudo apt install xdotool wmctrl imagemagick
 # Fedora
 sudo dnf install xdotool wmctrl ImageMagick
 ```
+
+### macOS
+
+macOS uses native CoreGraphics and AppleScript. No external packages are required.
+
+**Error:** `Accessibility access is required for window automation on macOS`
+
+**Solution:**
+1. Open System Settings → Privacy & Security → Accessibility
+2. Add your terminal emulator (e.g., Terminal.app, iTerm2, VS Code terminal)
+3. Restart your terminal
+
+> **Note:** If running from an IDE or editor, the *editor itself* may need Accessibility permissions, not just the integrated terminal.
 
 ## Missing Binaries
 
@@ -92,6 +106,17 @@ Reports include artifact references that must exist on disk.
 - Set `launch_if_missing = true` to auto-launch (default for most scenarios)
 - Check that the window title matches the expected pattern: `<provider> - Rust Chatbot`
 
+### macOS-specific window issues
+
+**Error:** Window found by `CGWindowListCopyWindowInfo` but geometry/activation fails
+
+**Cause:** Some sandboxed or signed apps restrict Accessibility access.
+
+**Solution:**
+- Ensure the target app is not running with strict sandboxing
+- Try activating the app manually before running `auto-ui`
+- AppleScript-based geometry queries require the target app to be Accessibility-visible
+
 ## Session Resolution Failures
 
 **Error:** `No visible sessions with messages were found`
@@ -106,10 +131,15 @@ Reports include artifact references that must exist on disk.
 
 **Error:** `failed to capture screenshot`
 
-**Solution:**
+### Linux
 - ImageMagick `import` command must be available
 - The window must be visible (not minimized)
-- DISPLAY must be accessible
+- `DISPLAY` must be accessible
+
+### macOS
+- The window must be on-screen (not hidden/minimized)
+- The target app must not be sandboxed in a way that blocks `CGWindowListCreateImage`
+- Accessibility permissions must be granted
 
 ## Build Hint Display
 

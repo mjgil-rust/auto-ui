@@ -50,10 +50,12 @@ than a general-purpose automation tool.
 
 - A browser-first automation framework.
 - Full OCR as a first milestone.
-- Cross-platform parity in v1.
+- Windows support in the current phase.
+- Wayland support in the current phase.
 - Replacing app-owned benchmark logic with generic automation when the app can
   already self-drive more reliably.
 - Auto-compiling arbitrary repos by default.
+- Headless virtual display on macOS (`--headless` is Linux-only).
 
 ## Design Principles
 
@@ -376,6 +378,16 @@ The repo should cover three layers:
 1. Unit tests for config parsing, path resolution, and report shaping.
 2. Adapter tests for scenario validation and metadata parsing.
 3. Optional live smoke tests gated by env vars for real desktop sessions.
+
+## Cross-Platform Driver Architecture
+
+The `WindowDriver` trait in `auto-ui-core` is the portability boundary. Each platform provides its own implementation:
+
+- **Linux/X11**: `X11WindowDriver` uses `xdotool`, `wmctrl`, and ImageMagick `import`.
+- **macOS**: `MacOsWindowDriver` uses CoreGraphics (`CGWindowListCopyWindowInfo`, `CGWindowListCreateImage`), `CGEventPost` for input, and AppleScript for geometry/activation.
+- **Image processing**: `crop_metric` and `image_size` are platform-agnostic, implemented in `auto-ui-core` with the Rust `image` crate (ImageMagick eliminated).
+
+See [docs/macos-support-design.md](/home/m/git/auto-ui/docs/macos-support-design.md) for the full macOS implementation design.
 
 ## Future Work
 

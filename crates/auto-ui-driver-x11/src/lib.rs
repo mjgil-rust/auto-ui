@@ -561,7 +561,10 @@ mod tests {
         fs::write(&img_path, "not an image").unwrap();
 
         let result = crop_metric(&img_path, 0, 0, 1, 1);
-        assert!(result.is_err(), "crop_metric should fail for non-image data");
+        assert!(
+            result.is_err(),
+            "crop_metric should fail for non-image data"
+        );
     }
 
     #[test]

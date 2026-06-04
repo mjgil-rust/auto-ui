@@ -89,8 +89,8 @@ pub fn crop_image(
     width: i32,
     height: i32,
 ) -> Result<()> {
-    let img = image::open(source)
-        .with_context(|| format!("failed to open {}", source.display()))?;
+    let img =
+        image::open(source).with_context(|| format!("failed to open {}", source.display()))?;
     let (img_width, img_height) = (img.width() as i32, img.height() as i32);
 
     let x = x.max(0).min(img_width) as u32;
@@ -119,8 +119,8 @@ pub fn crop_image(
 ///
 /// Converts to grayscale, normalizes contrast to the full range, and upscales 200%.
 pub fn enhance_image(source: &Path, target: &Path) -> Result<()> {
-    let img = image::open(source)
-        .with_context(|| format!("failed to open {}", source.display()))?;
+    let img =
+        image::open(source).with_context(|| format!("failed to open {}", source.display()))?;
 
     // Convert to grayscale
     let gray = img.to_luma8();
@@ -210,9 +210,7 @@ mod tests {
     #[test]
     fn crop_metric_gradient() {
         let path = temp_path("gradient");
-        let img = ImageBuffer::from_fn(100, 100, |x, _y| {
-            Rgba([x as u8, x as u8, x as u8, 255])
-        });
+        let img = ImageBuffer::from_fn(100, 100, |x, _y| Rgba([x as u8, x as u8, x as u8, 255]));
         img.save(&path).unwrap();
 
         let metric = crop_metric(&path, 0, 0, 100, 100).unwrap();

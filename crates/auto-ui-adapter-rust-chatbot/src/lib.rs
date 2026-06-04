@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use anyhow::{anyhow, bail, Context, Result};
 use auto_ui_artifacts::{write_report, Report};
 use auto_ui_core::{
-    build_output_dir, crop_image, enhance_image, expand_path, home_dir, heuristic_text_visible,
+    build_output_dir, crop_image, enhance_image, expand_path, heuristic_text_visible, home_dir,
     log_line, normalize_name, parse_widths, repo_root, request_background_launch, run_command,
     CompletedRun, TraceFields, WindowDriver, WindowGeometry,
 };

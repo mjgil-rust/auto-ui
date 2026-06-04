@@ -3,12 +3,12 @@ mod adapter_registry;
 mod display;
 pub mod errors;
 mod hybrid_orchestration;
+pub mod image_processing;
 mod interactive_window_orchestration;
 pub mod retry;
 pub mod safe_log;
 mod startup_orchestration;
 pub mod trace_parse;
-pub mod image_processing;
 pub mod window_driver;
 
 use std::collections::BTreeMap;
@@ -38,12 +38,9 @@ pub use errors::{
     TraceTimeoutError, WindowNotFoundError, WindowOperationError,
 };
 pub use hybrid_orchestration::{HybridOrchestrationConfig, HybridOrchestrator};
+pub use image_processing::{crop_image, crop_metric, enhance_image, image_size};
 pub use interactive_window_orchestration::{
     InteractiveOrchestrationConfig, InteractiveWindowOrchestrator, WindowState,
-};
-pub use image_processing::{crop_image, crop_metric, enhance_image, image_size};
-pub use window_driver::{
-    heuristic_text_visible, VisualMetric, WindowDriver, WindowGeometry,
 };
 pub use retry::{
     retry_with_backoff, trace_wait_config, window_discovery_config, RetryConfig, RetryError,
@@ -56,6 +53,7 @@ pub use startup_orchestration::{
     run_startup_scenario, StartupOrchestrationConfig, StartupOrchestrator,
 };
 pub use trace_parse::{extract_session_id, parse_trace_fields, trace_line_kind, TraceLineKind};
+pub use window_driver::{heuristic_text_visible, VisualMetric, WindowDriver, WindowGeometry};
 
 pub struct CommandOutput {
     pub stdout: String,
@@ -515,7 +513,9 @@ pub fn ensure_display(app_name: &str) -> Result<()> {
     #[cfg(target_os = "macos")]
     {
         if env::var_os("SSH_CONNECTION").is_some() {
-            bail!("Running over SSH. Run this from a local desktop terminal with {app_name} visible.");
+            bail!(
+                "Running over SSH. Run this from a local desktop terminal with {app_name} visible."
+            );
         }
     }
     Ok(())

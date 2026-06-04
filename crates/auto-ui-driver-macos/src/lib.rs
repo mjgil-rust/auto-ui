@@ -47,7 +47,8 @@ fn window_list() -> Vec<CFDictionary<CFString, CFType>> {
 /// Extract a string value from a window dictionary.
 fn get_string(dict: &CFDictionary<CFString, CFType>, key: CFString) -> Option<String> {
     dict.find(&key).map(|value| {
-        let s: CFString = unsafe { TCFType::wrap_under_get_rule(value.as_concrete_TypeRef().cast()) };
+        let s: CFString =
+            unsafe { TCFType::wrap_under_get_rule(value.as_concrete_TypeRef().cast()) };
         s.to_string()
     })
 }
@@ -55,7 +56,8 @@ fn get_string(dict: &CFDictionary<CFString, CFType>, key: CFString) -> Option<St
 /// Extract an i64 value from a window dictionary.
 fn get_i64(dict: &CFDictionary<CFString, CFType>, key: CFString) -> Option<i64> {
     dict.find(&key).and_then(|value| {
-        let num: CFNumber = unsafe { TCFType::wrap_under_get_rule(value.as_concrete_TypeRef().cast()) };
+        let num: CFNumber =
+            unsafe { TCFType::wrap_under_get_rule(value.as_concrete_TypeRef().cast()) };
         num.to_i64()
     })
 }
@@ -97,9 +99,13 @@ impl WindowDriver for MacOsWindowDriver {
         let windows = window_list();
         let mut matches = Vec::new();
         for dict in windows {
-            if let Some(window_name) = get_string(&dict, unsafe { CFString::wrap_under_get_rule(kCGWindowName) }) {
+            if let Some(window_name) = get_string(&dict, unsafe {
+                CFString::wrap_under_get_rule(kCGWindowName)
+            }) {
                 if window_name.to_lowercase().contains(&title_lower) {
-                    if let Some(window_id) = get_i64(&dict, unsafe { CFString::wrap_under_get_rule(kCGWindowNumber) }) {
+                    if let Some(window_id) = get_i64(&dict, unsafe {
+                        CFString::wrap_under_get_rule(kCGWindowNumber)
+                    }) {
                         matches.push(window_id.to_string());
                     }
                 }
@@ -112,9 +118,13 @@ impl WindowDriver for MacOsWindowDriver {
         let windows = window_list();
         let mut matches = Vec::new();
         for dict in windows {
-            if let Some(window_pid) = get_i64(&dict, unsafe { CFString::wrap_under_get_rule(kCGWindowOwnerPID) }) {
+            if let Some(window_pid) = get_i64(&dict, unsafe {
+                CFString::wrap_under_get_rule(kCGWindowOwnerPID)
+            }) {
                 if window_pid == pid as i64 {
-                    if let Some(window_id) = get_i64(&dict, unsafe { CFString::wrap_under_get_rule(kCGWindowNumber) }) {
+                    if let Some(window_id) = get_i64(&dict, unsafe {
+                        CFString::wrap_under_get_rule(kCGWindowNumber)
+                    }) {
                         matches.push(window_id.to_string());
                     }
                 }
@@ -171,10 +181,18 @@ impl WindowDriver for MacOsWindowDriver {
         // This is a heuristic; the most accurate method requires Accessibility APIs.
         let windows = window_list();
         for dict in windows {
-            let layer = get_i64(&dict, unsafe { CFString::wrap_under_get_rule(core_graphics::window::kCGWindowLayer) }).unwrap_or(0);
-            let onscreen = get_i64(&dict, unsafe { CFString::wrap_under_get_rule(core_graphics::window::kCGWindowIsOnscreen) }).unwrap_or(0);
+            let layer = get_i64(&dict, unsafe {
+                CFString::wrap_under_get_rule(core_graphics::window::kCGWindowLayer)
+            })
+            .unwrap_or(0);
+            let onscreen = get_i64(&dict, unsafe {
+                CFString::wrap_under_get_rule(core_graphics::window::kCGWindowIsOnscreen)
+            })
+            .unwrap_or(0);
             if layer == 0 && onscreen == 1 {
-                if let Some(id) = get_i64(&dict, unsafe { CFString::wrap_under_get_rule(kCGWindowNumber) }) {
+                if let Some(id) = get_i64(&dict, unsafe {
+                    CFString::wrap_under_get_rule(kCGWindowNumber)
+                }) {
                     return Ok(Some(id.to_string()));
                 }
             }
@@ -186,9 +204,14 @@ impl WindowDriver for MacOsWindowDriver {
         let target_id: i64 = window_id.parse().ok().unwrap_or(-1);
         let windows = window_list();
         for dict in windows {
-            if let Some(id) = get_i64(&dict, unsafe { CFString::wrap_under_get_rule(kCGWindowNumber) }) {
+            if let Some(id) = get_i64(&dict, unsafe {
+                CFString::wrap_under_get_rule(kCGWindowNumber)
+            }) {
                 if id == target_id {
-                    return Ok(get_i64(&dict, unsafe { CFString::wrap_under_get_rule(kCGWindowOwnerPID) }).map(|p| p as i32));
+                    return Ok(get_i64(&dict, unsafe {
+                        CFString::wrap_under_get_rule(kCGWindowOwnerPID)
+                    })
+                    .map(|p| p as i32));
                 }
             }
         }
@@ -199,7 +222,9 @@ impl WindowDriver for MacOsWindowDriver {
         let target_id: i64 = window_id.parse().ok().unwrap_or(-1);
         let windows = window_list();
         for dict in windows {
-            if let Some(id) = get_i64(&dict, unsafe { CFString::wrap_under_get_rule(kCGWindowNumber) }) {
+            if let Some(id) = get_i64(&dict, unsafe {
+                CFString::wrap_under_get_rule(kCGWindowNumber)
+            }) {
                 if id == target_id {
                     return Ok(true);
                 }
@@ -209,7 +234,8 @@ impl WindowDriver for MacOsWindowDriver {
     }
 
     fn get_geometry(&self, window_id: &str) -> Result<WindowGeometry> {
-        let pid = self.get_window_pid(window_id)?
+        let pid = self
+            .get_window_pid(window_id)?
             .ok_or_else(|| anyhow::anyhow!("cannot get geometry: window {window_id} has no PID"))?;
         let script = format!(
             "tell application \"System Events\" to tell (first process whose unix id is {pid}) to tell window 1 to return {{position, size}}"
@@ -234,7 +260,8 @@ impl WindowDriver for MacOsWindowDriver {
     }
 
     fn resize(&self, window_id: &str, width: u32, height: u32) -> Result<WindowGeometry> {
-        let pid = self.get_window_pid(window_id)?
+        let pid = self
+            .get_window_pid(window_id)?
             .ok_or_else(|| anyhow::anyhow!("cannot resize: window {window_id} has no PID"))?;
         let script = format!(
             "tell application \"System Events\" to tell (first process whose unix id is {pid}) to set size of window 1 to {{{width}, {height}}}"
@@ -244,7 +271,8 @@ impl WindowDriver for MacOsWindowDriver {
     }
 
     fn set_geometry(&self, window_id: &str, geometry: &WindowGeometry) -> Result<WindowGeometry> {
-        let pid = self.get_window_pid(window_id)?
+        let pid = self
+            .get_window_pid(window_id)?
             .ok_or_else(|| anyhow::anyhow!("cannot set geometry: window {window_id} has no PID"))?;
         let script = format!(
             "tell application \"System Events\" to tell (first process whose unix id is {pid}) to tell window 1 to set position to {{{}, {}}} and set size to {{{}, {}}}",
@@ -255,7 +283,8 @@ impl WindowDriver for MacOsWindowDriver {
     }
 
     fn activate(&self, window_id: &str) -> Result<()> {
-        let pid = self.get_window_pid(window_id)?
+        let pid = self
+            .get_window_pid(window_id)?
             .ok_or_else(|| anyhow::anyhow!("cannot activate: window {window_id} has no PID"))?;
         let script = format!(
             "tell application \"System Events\" to set frontmost of first process whose unix id is {pid} to true"
@@ -405,7 +434,9 @@ impl WindowDriver for MacOsWindowDriver {
             create_image, kCGWindowImageBoundsIgnoreFraming, kCGWindowListOptionIncludingWindow,
         };
 
-        let window_id_num: u32 = window_id.parse().map_err(|_| anyhow::anyhow!("invalid window id: {window_id}"))?;
+        let window_id_num: u32 = window_id
+            .parse()
+            .map_err(|_| anyhow::anyhow!("invalid window id: {window_id}"))?;
         let Some(image) = create_image(
             unsafe { CGRectNull },
             kCGWindowListOptionIncludingWindow,
@@ -439,9 +470,14 @@ impl WindowDriver for MacOsWindowDriver {
             }
         }
 
-        let rgba_image = image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(width as u32, height as u32, rgba)
-            .ok_or_else(|| anyhow::anyhow!("failed to create image buffer from screenshot data"))?;
-        rgba_image.save(output_path)
+        let rgba_image = image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(
+            width as u32,
+            height as u32,
+            rgba,
+        )
+        .ok_or_else(|| anyhow::anyhow!("failed to create image buffer from screenshot data"))?;
+        rgba_image
+            .save(output_path)
             .with_context(|| format!("failed to save screenshot to {}", output_path.display()))?;
         Ok(())
     }

@@ -64,7 +64,12 @@ pub fn run(args: Args) -> Result<()> {
     let completed = match target.as_str() {
         "rust_chatbot" => {
             let driver = crate::build_driver()?;
-            rust_chatbot::run_named_scenario(&*driver, &scenario, scenario_file.value, output_override)?
+            rust_chatbot::run_named_scenario(
+                &*driver,
+                &scenario,
+                scenario_file.value,
+                output_override,
+            )?
         }
         "gpui_component_testing" => {
             let driver = crate::build_driver()?;

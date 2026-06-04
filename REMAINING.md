@@ -32,8 +32,9 @@ hardening, polish, and expansion work.
 
 ## 4. Driver Expansion
 
-- Add a non-X11 path for environments where `xdotool` and `wmctrl` are not
-  available.
+- ~~Add a non-X11 path for environments where `xdotool` and `wmctrl` are not
+  available.~~ ✅ macOS driver (`auto-ui-driver-macos`) implemented via CoreGraphics
+  and AppleScript.
 - Evaluate a Wayland-compatible driver.
 - Consider accessibility-driven input as a higher-integrity option than pointer
   automation in some cases.

@@ -36,21 +36,24 @@ pub struct Args {
 
 pub fn run(args: Args) -> Result<()> {
     let driver = crate::build_driver()?;
-    run_header_debug(&*driver, HeaderDebugConfig {
-        app_root: args.app_root,
-        provider: args.provider,
-        instance: args.instance,
-        session_id: args.session_id,
-        session_name: args.session_name,
-        include_hidden: args.include_hidden,
-        widths: args.widths,
-        height: args.height,
-        header_height: args.header_height,
-        window_timeout: args.window_timeout,
-        trace_timeout: args.trace_timeout,
-        settle: args.settle,
-        output_dir: args.output_dir,
-        keep_front: args.keep_front,
-    })?;
+    run_header_debug(
+        &*driver,
+        HeaderDebugConfig {
+            app_root: args.app_root,
+            provider: args.provider,
+            instance: args.instance,
+            session_id: args.session_id,
+            session_name: args.session_name,
+            include_hidden: args.include_hidden,
+            widths: args.widths,
+            height: args.height,
+            header_height: args.header_height,
+            window_timeout: args.window_timeout,
+            trace_timeout: args.trace_timeout,
+            settle: args.settle,
+            output_dir: args.output_dir,
+            keep_front: args.keep_front,
+        },
+    )?;
     Ok(())
 }

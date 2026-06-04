@@ -18,12 +18,42 @@ This repo currently supports both `rust-chatbot` and
 
 ## Requirements
 
+### Linux
+
 - Linux desktop session with `DISPLAY` set
 - Rust toolchain installed locally
 - `xdotool`
 - `wmctrl`
-- ImageMagick tools: `import`, `convert`, `identify`
+- `import` (ImageMagick) for X11 screenshots
 - A separate target app checkout with release binaries already built
+
+### macOS
+
+- macOS 12 (Monterey) or later
+- Rust toolchain installed locally
+- **Accessibility permissions** enabled for the terminal running `auto-ui`  
+  (System Settings → Privacy & Security → Accessibility)
+- A separate target app checkout with release binaries already built
+
+> **Note:** `--headless` mode is not supported on macOS. Run from a local desktop terminal.
+
+### Setup
+
+**Linux (Debian/Ubuntu):**
+```bash
+sudo apt install xdotool wmctrl imagemagick
+```
+
+**Linux (Fedora):**
+```bash
+sudo dnf install xdotool wmctrl ImageMagick
+```
+
+**macOS:**
+```bash
+# No external packages required. CoreGraphics and AppleScript are used natively.
+# Ensure Accessibility permissions are granted to your terminal emulator.
+```
 
 This repo does not build target apps itself. Build the target app through your
 lightweight build path first, then point `auto-ui` at that checkout. Build this
@@ -115,6 +145,13 @@ session, built target app binaries, and explicit env vars.
 
 CI does not run live tests by default. Run them manually with the appropriate
 environment variables set.
+
+### macOS Live Tests
+
+On macOS, the same env vars apply. Additional requirements:
+- Run from a local desktop terminal (not over SSH)
+- Grant Accessibility permissions to your terminal
+- `--headless` is not supported; use an existing desktop session
 
 ## Desktop Behavior
 

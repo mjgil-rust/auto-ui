@@ -279,22 +279,25 @@ fn live_debug_single_session_smoke() {
     require_live_opt_in();
     let output_dir = unique_temp_dir("rust-chatbot-debug-live");
     let driver = auto_ui_driver_x11::X11WindowDriver::new();
-    let completed = run_debug(&driver, DebugConfig {
-        app_root: Some(require_env("AUTO_UI_TEST_RUST_CHATBOT_ROOT")),
-        provider: provider_from_env(),
-        instance: None,
-        widths: "520".to_string(),
-        height: 720,
-        max_sessions: 1,
-        session_id: Some(require_env("AUTO_UI_TEST_RUST_CHATBOT_SESSION_ID")),
-        include_hidden: true,
-        launch_if_missing: true,
-        window_timeout: 20.0,
-        trace_timeout: 10.0,
-        settle: 0.7,
-        output_dir: Some(output_dir.display().to_string()),
-        keep_front: false,
-    })
+    let completed = run_debug(
+        &driver,
+        DebugConfig {
+            app_root: Some(require_env("AUTO_UI_TEST_RUST_CHATBOT_ROOT")),
+            provider: provider_from_env(),
+            instance: None,
+            widths: "520".to_string(),
+            height: 720,
+            max_sessions: 1,
+            session_id: Some(require_env("AUTO_UI_TEST_RUST_CHATBOT_SESSION_ID")),
+            include_hidden: true,
+            launch_if_missing: true,
+            window_timeout: 20.0,
+            trace_timeout: 10.0,
+            settle: 0.7,
+            output_dir: Some(output_dir.display().to_string()),
+            keep_front: false,
+        },
+    )
     .unwrap();
     assert!(completed.report_path.exists());
 }
@@ -306,22 +309,25 @@ fn live_header_debug_single_session_smoke() {
     require_live_opt_in();
     let output_dir = unique_temp_dir("rust-chatbot-header-live");
     let driver = auto_ui_driver_x11::X11WindowDriver::new();
-    let completed = run_header_debug(&driver, HeaderDebugConfig {
-        app_root: Some(require_env("AUTO_UI_TEST_RUST_CHATBOT_ROOT")),
-        provider: provider_from_env(),
-        instance: None,
-        session_id: Some(require_env("AUTO_UI_TEST_RUST_CHATBOT_SESSION_ID")),
-        session_name: None,
-        include_hidden: true,
-        widths: "520".to_string(),
-        height: 720,
-        header_height: 140,
-        window_timeout: 20.0,
-        trace_timeout: 12.0,
-        settle: 0.8,
-        output_dir: Some(output_dir.display().to_string()),
-        keep_front: false,
-    })
+    let completed = run_header_debug(
+        &driver,
+        HeaderDebugConfig {
+            app_root: Some(require_env("AUTO_UI_TEST_RUST_CHATBOT_ROOT")),
+            provider: provider_from_env(),
+            instance: None,
+            session_id: Some(require_env("AUTO_UI_TEST_RUST_CHATBOT_SESSION_ID")),
+            session_name: None,
+            include_hidden: true,
+            widths: "520".to_string(),
+            height: 720,
+            header_height: 140,
+            window_timeout: 20.0,
+            trace_timeout: 12.0,
+            settle: 0.8,
+            output_dir: Some(output_dir.display().to_string()),
+            keep_front: false,
+        },
+    )
     .unwrap();
     assert!(completed.report_path.exists());
 }
@@ -333,20 +339,23 @@ fn live_prompt_debug_single_session_smoke() {
     require_live_opt_in();
     let output_dir = unique_temp_dir("rust-chatbot-prompt-live");
     let driver = auto_ui_driver_x11::X11WindowDriver::new();
-    let completed = run_prompt_debug(&driver, PromptDebugConfig {
-        app_root: Some(require_env("AUTO_UI_TEST_RUST_CHATBOT_ROOT")),
-        provider: provider_from_env(),
-        instance: None,
-        session_id: require_env("AUTO_UI_TEST_RUST_CHATBOT_SESSION_ID"),
-        prompt: "Hello, respond with a brief greeting.".to_string(),
-        width: 700,
-        height: 720,
-        window_timeout: 20.0,
-        response_timeout: 30.0,
-        settle: 0.8,
-        output_dir: Some(output_dir.display().to_string()),
-        keep_front: false,
-    })
+    let completed = run_prompt_debug(
+        &driver,
+        PromptDebugConfig {
+            app_root: Some(require_env("AUTO_UI_TEST_RUST_CHATBOT_ROOT")),
+            provider: provider_from_env(),
+            instance: None,
+            session_id: require_env("AUTO_UI_TEST_RUST_CHATBOT_SESSION_ID"),
+            prompt: "Hello, respond with a brief greeting.".to_string(),
+            width: 700,
+            height: 720,
+            window_timeout: 20.0,
+            response_timeout: 30.0,
+            settle: 0.8,
+            output_dir: Some(output_dir.display().to_string()),
+            keep_front: false,
+        },
+    )
     .unwrap();
     assert!(completed.report_path.exists());
 }

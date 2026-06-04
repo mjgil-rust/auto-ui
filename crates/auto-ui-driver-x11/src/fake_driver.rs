@@ -9,7 +9,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use super::{WindowDriver, WindowGeometry, VisualMetric};
+use super::{VisualMetric, WindowDriver, WindowGeometry};
 
 /// A fake window ID for testing.
 pub const FAKE_WINDOW_ID: &str = "0xFAKE123";
@@ -104,11 +104,7 @@ impl WindowDriver for FakeWindowDriver {
         Ok(self.state.lock().unwrap().keys().next().cloned())
     }
 
-    fn find_window_for_pid(
-        &self,
-        _pid: i32,
-        _timeout: Duration,
-    ) -> anyhow::Result<Option<String>> {
+    fn find_window_for_pid(&self, _pid: i32, _timeout: Duration) -> anyhow::Result<Option<String>> {
         Ok(self.state.lock().unwrap().keys().next().cloned())
     }
 

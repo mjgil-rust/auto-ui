@@ -6,9 +6,9 @@
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use anyhow::{bail, Result};
 use crate::window_driver::WindowGeometry;
 use crate::{log_line, Event, LaunchedRun, WindowSelector};
+use anyhow::{bail, Result};
 
 /// Configuration for interactive window orchestration.
 #[derive(Clone, Debug)]
