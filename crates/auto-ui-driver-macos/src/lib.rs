@@ -53,6 +53,21 @@ fn get_i64(dict: &CFDictionary<CFString, CFType>, key: CFString) -> Option<i64> 
     })
 }
 
+/// Run an AppleScript command and return its stdout.
+fn run_applescript(script: &str) -> Result<String> {
+    use std::process::Command;
+    let output = Command::new("osascript")
+        .arg("-e")
+        .arg(script)
+        .output()
+        .with_context(|| "failed to run osascript")?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        bail!("osascript failed: {stderr}");
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
 impl WindowDriver for MacOsWindowDriver {
     fn check_required_tools(&self) -> Result<()> {
         #[link(name = "ApplicationServices", kind = "framework")]
@@ -186,38 +201,85 @@ impl WindowDriver for MacOsWindowDriver {
         Ok(false)
     }
 
-    fn get_geometry(&self, _window_id: &str) -> Result<WindowGeometry> {
-        bail!("get_geometry not yet implemented for macOS")
+    fn get_geometry(&self, window_id: &str) -> Result<WindowGeometry> {
+        let pid = self.get_window_pid(window_id)?
+            .ok_or_else(|| anyhow::anyhow!("cannot get geometry: window {window_id} has no PID"))?;
+        let script = format!(
+            "tell application \"System Events\" to tell (first process whose unix id is {pid}) to tell window 1 to return {{position, size}}"
+        );
+        let output = run_applescript(&script)?;
+        let output = output.trim();
+        // Parse output like "{{100, 200}, {800, 600}}"
+        let parts: Vec<i32> = output
+            .split(|c: char| !c.is_ascii_digit() && c != '-')
+            .filter(|s| !s.is_empty())
+            .map(|s| s.parse().unwrap_or(0))
+            .collect();
+        if parts.len() < 4 {
+            bail!("unexpected AppleScript output for geometry: {output}");
+        }
+        Ok(WindowGeometry {
+            x: parts[0],
+            y: parts[1],
+            width: parts[2],
+            height: parts[3],
+        })
     }
 
-    fn resize(&self, _window_id: &str, _width: u32, _height: u32) -> Result<WindowGeometry> {
-        bail!("resize not yet implemented for macOS")
+    fn resize(&self, window_id: &str, width: u32, height: u32) -> Result<WindowGeometry> {
+        let pid = self.get_window_pid(window_id)?
+            .ok_or_else(|| anyhow::anyhow!("cannot resize: window {window_id} has no PID"))?;
+        let script = format!(
+            "tell application \"System Events\" to tell (first process whose unix id is {pid}) to set size of window 1 to {{{width}, {height}}}"
+        );
+        run_applescript(&script)?;
+        self.get_geometry(window_id)
     }
 
-    fn set_geometry(&self, _window_id: &str, _geometry: &WindowGeometry) -> Result<WindowGeometry> {
-        bail!("set_geometry not yet implemented for macOS")
+    fn set_geometry(&self, window_id: &str, geometry: &WindowGeometry) -> Result<WindowGeometry> {
+        let pid = self.get_window_pid(window_id)?
+            .ok_or_else(|| anyhow::anyhow!("cannot set geometry: window {window_id} has no PID"))?;
+        let script = format!(
+            "tell application \"System Events\" to tell (first process whose unix id is {pid}) to tell window 1 to set position to {{{}, {}}} and set size to {{{}, {}}}",
+            geometry.x, geometry.y, geometry.width, geometry.height
+        );
+        run_applescript(&script)?;
+        self.get_geometry(window_id)
     }
 
-    fn activate(&self, _window_id: &str) -> Result<()> {
-        bail!("activate not yet implemented for macOS")
+    fn activate(&self, window_id: &str) -> Result<()> {
+        let pid = self.get_window_pid(window_id)?
+            .ok_or_else(|| anyhow::anyhow!("cannot activate: window {window_id} has no PID"))?;
+        let script = format!(
+            "tell application \"System Events\" to set frontmost of first process whose unix id is {pid} to true"
+        );
+        run_applescript(&script)?;
+        Ok(())
     }
 
     fn lower(&self, _window_id: &str) -> Result<()> {
-        bail!("lower not yet implemented for macOS")
+        // macOS does not have a reliable "lower window" API.
+        Ok(())
     }
 
-    fn background(&self, _window_id: &str, _restore_window_id: Option<&str>) -> Result<()> {
-        bail!("background not yet implemented for macOS")
+    fn background(&self, window_id: &str, restore_window_id: Option<&str>) -> Result<()> {
+        self.lower(window_id)?;
+        if let Some(restore_id) = restore_window_id {
+            self.activate(restore_id)?;
+        }
+        Ok(())
     }
 
     fn prepare_window_for_capture(
         &self,
-        _window_id: &str,
-        _width: u32,
-        _height: u32,
-        _restore_window_id: Option<&str>,
+        window_id: &str,
+        width: u32,
+        height: u32,
+        restore_window_id: Option<&str>,
     ) -> Result<WindowGeometry> {
-        bail!("prepare_window_for_capture not yet implemented for macOS")
+        let geometry = self.resize(window_id, width, height)?;
+        self.background(window_id, restore_window_id)?;
+        Ok(geometry)
     }
 
     fn press_key(&self, _window_id: &str, key: &str) -> Result<()> {
