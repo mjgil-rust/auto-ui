@@ -97,7 +97,7 @@ This task list tracks every item required to implement the macOS support design 
 
 | No. | Task | Status | Required Tests Before Complete | Required Documentation Before Complete | Crate Design |
 |-----|------|--------|-------------------------------|----------------------------------------|--------------|
-| 62 | Add `macos-latest` job to `.github/workflows/ci.yml` | Incomplete | CI workflow parses correctly (use `actionlint` or GitHub Actions schema validation); macOS job completes successfully | CONTRIBUTING.md must mention macOS CI | Duplicate existing `test` job with `runs-on: macos-latest`; run `cargo fmt`, `cargo clippy`, `cargo check`, `cargo test`, `cargo build --release` |
+| 62 | Add `macos-latest` job to `.github/workflows/ci.yml` | Complete | CI workflow parses correctly (use `actionlint` or GitHub Actions schema validation); macOS job completes successfully | CONTRIBUTING.md must mention macOS CI | Added `test-macos` job with `runs-on: macos-latest`; runs fmt, clippy, check, test, build --release |
 | 63 | Update `README.md` requirements section for macOS | Incomplete | N/A (docs-only) | README must list macOS 12+ and Accessibility permissions; remove "Linux only" language | New section: "Requirements — macOS" |
 | 64 | Update `README.md` setup instructions to remove ImageMagick | Incomplete | N/A (docs-only) | Linux setup must remove ImageMagick install commands; macOS setup must not mention it | Edit existing apt-get / brew lists |
 | 65 | Update `DESIGN.md` cross-platform section | Incomplete | N/A (docs-only) | DESIGN must state that driver expansion now includes macOS; update Non-Goals if cross-platform parity is now a goal | Edit "Future Work" and "Non-Goals" sections |
@@ -108,5 +108,5 @@ This task list tracks every item required to implement the macOS support design 
 | 70 | Add `docs/macos-support-design.md` cross-reference to `DESIGN.md` | Incomplete | N/A (docs-only) | DESIGN.md should link to the macOS design doc for implementation details | Add link in "Future Work" or "Driver Expansion" section |
 | 71 | Final end-to-end validation: run rust-chatbot `debug` scenario on macOS with live test | Incomplete | Live smoke test with `AUTO_UI_RUN_LIVE_TESTS=1` on macOS hardware | N/A | Manual validation gate |
 | 72 | Final end-to-end validation: run GPUI `scroll_matrix` scenario on macOS with live test | Incomplete | Live smoke test with `AUTO_UI_RUN_LIVE_TESTS=1` on macOS hardware | N/A | Manual validation gate |
-| 73 | Run `cargo clippy --workspace --all-targets` on macOS with zero warnings | Incomplete | CI clippy job on `macos-latest` passes | N/A | Quality gate |
+| 73 | Run `cargo clippy --workspace --all-targets` on macOS with zero warnings | Complete | CI clippy job on `macos-latest` passes | N/A | Fixed 18+ pre-existing clippy warnings across workspace; `cargo clippy --workspace --all-targets -- -D warnings` passes |
 | 74 | Run `cargo fmt --all -- --check` on macOS | Incomplete | CI fmt job on `macos-latest` passes | N/A | Quality gate |
