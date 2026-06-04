@@ -1,9 +1,12 @@
 use std::env;
 use std::process::{Child, Command, Stdio};
+use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 
 use anyhow::{bail, Result};
+
+static HEADLESS_START_LOCK: Mutex<()> = Mutex::new(());
 
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
@@ -17,6 +20,7 @@ pub struct HeadlessDisplay {
 
 impl HeadlessDisplay {
     pub fn start(geometry: &str) -> Result<Self> {
+        let _guard = HEADLESS_START_LOCK.lock().unwrap();
         let display = find_free_display()?;
         let original_display = env::var("DISPLAY").ok();
 
@@ -152,11 +156,13 @@ impl Drop for HeadlessDisplay {
         // Brief pause for OS to clean up the rest of the process group
         thread::sleep(Duration::from_millis(100));
 
-        // Clean up lock file
+        // Clean up lock file and socket
         if let Some(rest) = display.strip_prefix(':') {
             if let Ok(num) = rest.parse::<u32>() {
                 let lock_path = format!("/tmp/.X{num}-lock");
                 let _ = std::fs::remove_file(&lock_path);
+                let socket_path = format!("/tmp/.X11-unix/X{num}");
+                let _ = std::fs::remove_file(&socket_path);
             }
         }
 
