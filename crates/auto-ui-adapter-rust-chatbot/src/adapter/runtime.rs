@@ -617,15 +617,21 @@ fn parse_trace_fields(line: &str) -> TraceFields {
 
 /// Extract session_id from a trace line, checking both quoted and unquoted forms.
 fn extract_session_id_from_line(line: &str) -> Option<String> {
-    // Try quoted form first: session_id="abc123"
+    // Try quoted form first: session_id="abc123" — anchored to a non-word
+    // boundary on the left so we don't match the suffix of other field names
+    // like "sidebar_top_session_id=\"...\"".
     static QUOTED_RE: OnceLock<Regex> = OnceLock::new();
-    let quoted_re = QUOTED_RE.get_or_init(|| Regex::new(r#"session_id="([^"]+)""#).unwrap());
+    let quoted_re = QUOTED_RE.get_or_init(|| {
+        Regex::new(r#"(?:^|[^\w])session_id="([^"]+)""#).unwrap()
+    });
     if let Some(caps) = quoted_re.captures(line) {
         return Some(caps.get(1).unwrap().as_str().to_string());
     }
-    // Try unquoted form: session_id=abc123
+    // Try unquoted form: session_id=abc123 — same anchor trick.
     static UNQUOTED_RE: OnceLock<Regex> = OnceLock::new();
-    let unquoted_re = UNQUOTED_RE.get_or_init(|| Regex::new(r#"session_id=(\S+)"#).unwrap());
+    let unquoted_re = UNQUOTED_RE.get_or_init(|| {
+        Regex::new(r#"(?:^|[^\w])session_id=(\S+)"#).unwrap()
+    });
     if let Some(caps) = unquoted_re.captures(line) {
         return Some(caps.get(1).unwrap().as_str().to_string());
     }

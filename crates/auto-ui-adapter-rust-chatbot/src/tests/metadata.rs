@@ -14,6 +14,7 @@ fn create_mock_sessions_map(
         Provider::GeminiCliForge => ".gemini-cli-forge-desktop",
         Provider::MiniMaxForge => ".minimax-forge-desktop",
         Provider::OmniForge => ".omniforge-desktop",
+        Provider::Pioneer => ".pioneer-desktop",
     });
     fs::create_dir_all(&data_dir).unwrap();
     let metadata_path = data_dir.join("sessions.json");

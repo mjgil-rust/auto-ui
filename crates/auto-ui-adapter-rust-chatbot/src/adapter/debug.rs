@@ -19,6 +19,7 @@ pub enum Provider {
     #[serde(alias = "minimax-forge", alias = "minimax_forge")]
     MiniMaxForge,
     OmniForge,
+    Pioneer,
 }
 
 impl Provider {
@@ -32,6 +33,7 @@ impl Provider {
             Provider::GeminiCliForge => "geminicliforge",
             Provider::MiniMaxForge => "minimaxforge",
             Provider::OmniForge => "omniforge",
+            Provider::Pioneer => "pioneer",
         }
     }
 
@@ -45,6 +47,7 @@ impl Provider {
             Provider::GeminiCliForge => "GeminiCliForge Rust Chatbot",
             Provider::MiniMaxForge => "MiniMaxForge Rust Chatbot",
             Provider::OmniForge => "OmniForge Rust Chatbot",
+            Provider::Pioneer => "Pioneer Rust Chatbot",
         }
     }
 
@@ -58,6 +61,7 @@ impl Provider {
             Provider::GeminiCliForge => ".gemini-cli-forge-desktop",
             Provider::MiniMaxForge => ".minimax-forge-desktop",
             Provider::OmniForge => ".omniforge-desktop",
+            Provider::Pioneer => ".pioneer-desktop",
         }
     }
 
@@ -71,6 +75,8 @@ impl Provider {
             Provider::GeminiCliForge => "gemini_session_id",
             Provider::MiniMaxForge => "minimax_session_id",
             Provider::OmniForge => "omniforge_session_id",
+            // Pioneer is stateless (subprocess per request, no resume session id).
+            Provider::Pioneer => "pioneer_session_id",
         }
     }
 }

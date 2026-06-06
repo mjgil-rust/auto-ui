@@ -63,6 +63,7 @@ fn provider_from_env() -> Provider {
         "geminicliforge" | "gemini-cli-forge" | "gemini_cli_forge" => Provider::GeminiCliForge,
         "minimaxforge" | "minimax-forge" | "minimax_forge" => Provider::MiniMaxForge,
         "omniforge" => Provider::OmniForge,
+        "pioneer" => Provider::Pioneer,
         other => panic!("unsupported AUTO_UI_TEST_RUST_CHATBOT_PROVIDER={other}"),
     }
 }
@@ -123,6 +124,14 @@ fn forge_providers_map_to_rust_chatbot_metadata() {
     assert_eq!(Provider::Kimi.title_base(), "Kimi Rust Chatbot");
     assert_eq!(Provider::Kimi.data_dir_name(), ".kimi-desktop");
     assert_eq!(Provider::Kimi.provider_session_field(), "kimi_session_id");
+
+    assert_eq!(Provider::Pioneer.as_str(), "pioneer");
+    assert_eq!(Provider::Pioneer.title_base(), "Pioneer Rust Chatbot");
+    assert_eq!(Provider::Pioneer.data_dir_name(), ".pioneer-desktop");
+    assert_eq!(
+        Provider::Pioneer.provider_session_field(),
+        "pioneer_session_id"
+    );
 }
 
 #[test]

@@ -124,6 +124,28 @@ fn extract_session_id_from_line_handles_mixed_quoting() {
 }
 
 #[test]
+fn extract_session_id_from_line_does_not_match_field_suffix() {
+    // Real ui_auto_debug lines include sidebar fields whose names end in
+    // "_session_id" — the unanchored regex would treat the suffix as a
+    // session_id match. The line below mirrors what main_panel.rs emits:
+    // the loaded session is "loaded", but the sidebar's top session is
+    // "sidebar-top". The function must return "loaded", not "sidebar-top".
+    let line = r#"ui_auto_debug session_id=loaded session_name=pio-greet provider=pioneer sidebar_top_session_id="sidebar-top" sidebar_top_session_name="pio-long""#;
+    let session_id = extract_session_id_from_line(line);
+    assert_eq!(session_id, Some("loaded".to_string()));
+}
+
+#[test]
+fn extract_session_id_from_line_does_not_match_quoted_field_suffix() {
+    // Same as above but with all quoted values. The previous regex matched
+    // the substring `session_id="sidebar-top"` inside
+    // `sidebar_top_session_id="sidebar-top"`, returning the wrong id.
+    let line = r#"ui_auto_debug session_id="loaded" session_name="pio-greet" sidebar_top_session_id="sidebar-top""#;
+    let session_id = extract_session_id_from_line(line);
+    assert_eq!(session_id, Some("loaded".to_string()));
+}
+
+#[test]
 fn load_sessions_falls_back_when_some_default_sessions_missing() {
     // When some but not all named sessions exist, should fall back to recent
     let mut map = Map::new();

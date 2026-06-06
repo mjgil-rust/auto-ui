@@ -293,10 +293,63 @@ fn rust_chatbot_log_dir() -> Result<PathBuf> {
     if let Ok(path) = std::env::var("XDG_STATE_HOME") {
         return Ok(PathBuf::from(path).join("rust-chatbot"));
     }
-    Ok(home_dir()?
-        .join(".local")
-        .join("state")
-        .join("rust-chatbot"))
+    let home = home_dir()?;
+    let linux_default = home.join(".local").join("state").join("rust-chatbot");
+    // macOS path used by rust-chatbot's debug::log_dir() — see
+    // chatbot-worker/src/debug.rs: APP_LOG_DIR_MAC = "RustChatbot" under
+    // ~/Library/Logs. auto-ui tests on Linux usually have the XDG dir
+    // populated, but on macOS the binary writes to Library/Logs instead.
+    // We probe both and pick the one that actually contains a fresh log file
+    // (so seeded-but-empty Linux dirs on macOS hosts don't shadow the real
+    // macOS path).
+    let macos_default = home.join("Library").join("Logs").join("RustChatbot");
+    let pick = |dir: &PathBuf| -> Option<PathBuf> {
+        let entries = fs::read_dir(dir).ok()?;
+        let mut newest: Option<(PathBuf, SystemTime)> = None;
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("rust-chatbot.log."))
+            {
+                if let Ok(metadata) = entry.metadata() {
+                    if let Ok(modified) = metadata.modified() {
+                        if newest.as_ref().is_none_or(|(_, t)| modified > *t) {
+                            newest = Some((path, modified));
+                        }
+                    }
+                }
+            }
+        }
+        newest.map(|(p, _)| p)
+    };
+    let macos_pick = pick(&macos_default);
+    let linux_pick = pick(&linux_default);
+    match (macos_pick, linux_pick) {
+        (Some(macos_log), Some(linux_log)) => {
+            // Both have logs: prefer the more recently modified one.
+            let macos_mtime = fs::metadata(&macos_log).and_then(|m| m.modified()).ok();
+            let linux_mtime = fs::metadata(&linux_log).and_then(|m| m.modified()).ok();
+            match (macos_mtime, linux_mtime) {
+                (Some(m), Some(l)) if l > m => Ok(linux_default),
+                _ => Ok(macos_default),
+            }
+        }
+        (Some(_), None) => Ok(macos_default),
+        (None, Some(_)) => Ok(linux_default),
+        (None, None) => {
+            // Neither has logs; fall back to the platform default so the
+            // error message names the right location for the host.
+            #[cfg(target_os = "macos")]
+            {
+                let _ = macos_default;
+                Ok(linux_default)
+            }
+            #[cfg(not(target_os = "macos"))]
+            Ok(linux_default)
+        }
+    }
 }
 
 fn newest_trace_log() -> Result<PathBuf> {
