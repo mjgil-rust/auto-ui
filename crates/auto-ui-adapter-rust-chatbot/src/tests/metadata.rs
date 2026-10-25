@@ -15,6 +15,8 @@ fn create_mock_sessions_map(
         Provider::MiniMaxForge => ".minimax-forge-desktop",
         Provider::OmniForge => ".omniforge-desktop",
         Provider::Pioneer => ".pioneer-desktop",
+        Provider::Agy => ".gemini-desktop",
+        Provider::OpenRouterChatbotCli => ".openrouter-chatbot-cli-desktop",
     });
     fs::create_dir_all(&data_dir).unwrap();
     let metadata_path = data_dir.join("sessions.json");
@@ -85,6 +87,8 @@ fn read_sessions_metadata_all_provider_types() {
         Provider::GeminiCliForge,
         Provider::MiniMaxForge,
         Provider::OmniForge,
+        Provider::Agy,
+        Provider::OpenRouterChatbotCli,
     ] {
         let temp = unique_temp_dir(&format!("metadata-{provider:?}"));
         let sessions_json = serde_json::json!({

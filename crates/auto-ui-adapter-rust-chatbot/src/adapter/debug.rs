@@ -1,6 +1,7 @@
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "lowercase")]
 pub enum Provider {
+    Agy,
     Claude,
     Codex,
     Gemini,
@@ -20,11 +21,15 @@ pub enum Provider {
     MiniMaxForge,
     OmniForge,
     Pioneer,
+    #[value(name = "openrouter_chatbot_cli", alias = "openrouter-chatbot-cli", alias = "orcli")]
+    #[serde(alias = "openrouter_chatbot_cli", alias = "openrouter-chatbot-cli", alias = "orcli")]
+    OpenRouterChatbotCli,
 }
 
 impl Provider {
     pub fn as_str(self) -> &'static str {
         match self {
+            Provider::Agy => "agy",
             Provider::Claude => "claude",
             Provider::Codex => "codex",
             Provider::Gemini => "gemini",
@@ -34,11 +39,13 @@ impl Provider {
             Provider::MiniMaxForge => "minimaxforge",
             Provider::OmniForge => "omniforge",
             Provider::Pioneer => "pioneer",
+            Provider::OpenRouterChatbotCli => "openrouter_chatbot_cli",
         }
     }
 
     pub fn title_base(self) -> &'static str {
         match self {
+            Provider::Agy => "Agy Rust Chatbot",
             Provider::Claude => "Claude Rust Chatbot",
             Provider::Codex => "Codex Rust Chatbot",
             Provider::Gemini => "Gemini Rust Chatbot",
@@ -48,11 +55,13 @@ impl Provider {
             Provider::MiniMaxForge => "MiniMaxForge Rust Chatbot",
             Provider::OmniForge => "OmniForge Rust Chatbot",
             Provider::Pioneer => "Pioneer Rust Chatbot",
+            Provider::OpenRouterChatbotCli => "OpenRouter Chatbot-CLI Rust Chatbot",
         }
     }
 
     pub fn data_dir_name(self) -> &'static str {
         match self {
+            Provider::Agy => ".gemini-desktop",
             Provider::Claude => ".claude-desktop",
             Provider::Codex => ".codex-desktop",
             Provider::Gemini => ".gemini-desktop",
@@ -62,11 +71,13 @@ impl Provider {
             Provider::MiniMaxForge => ".minimax-forge-desktop",
             Provider::OmniForge => ".omniforge-desktop",
             Provider::Pioneer => ".pioneer-desktop",
+            Provider::OpenRouterChatbotCli => ".openrouter-chatbot-cli-desktop",
         }
     }
 
     pub fn provider_session_field(self) -> &'static str {
         match self {
+            Provider::Agy => "gemini_session_id",
             Provider::Claude => "claude_session_id",
             Provider::Codex => "codex_session_id",
             Provider::Gemini => "gemini_session_id",
@@ -77,6 +88,7 @@ impl Provider {
             Provider::OmniForge => "omniforge_session_id",
             // Pioneer is stateless (subprocess per request, no resume session id).
             Provider::Pioneer => "pioneer_session_id",
+            Provider::OpenRouterChatbotCli => "openrouter_chatbot_cli_session_id",
         }
     }
 }

@@ -64,6 +64,7 @@ fn provider_from_env() -> Provider {
         "minimaxforge" | "minimax-forge" | "minimax_forge" => Provider::MiniMaxForge,
         "omniforge" => Provider::OmniForge,
         "pioneer" => Provider::Pioneer,
+        "openrouter_chatbot_cli" | "openrouter-chatbot-cli" | "orcli" => Provider::OpenRouterChatbotCli,
         other => panic!("unsupported AUTO_UI_TEST_RUST_CHATBOT_PROVIDER={other}"),
     }
 }
@@ -131,6 +132,14 @@ fn forge_providers_map_to_rust_chatbot_metadata() {
     assert_eq!(
         Provider::Pioneer.provider_session_field(),
         "pioneer_session_id"
+    );
+
+    assert_eq!(Provider::OpenRouterChatbotCli.as_str(), "openrouter_chatbot_cli");
+    assert_eq!(Provider::OpenRouterChatbotCli.title_base(), "OpenRouter Chatbot-CLI Rust Chatbot");
+    assert_eq!(Provider::OpenRouterChatbotCli.data_dir_name(), ".openrouter-chatbot-cli-desktop");
+    assert_eq!(
+        Provider::OpenRouterChatbotCli.provider_session_field(),
+        "openrouter_chatbot_cli_session_id"
     );
 }
 
