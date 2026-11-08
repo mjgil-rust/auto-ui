@@ -486,6 +486,8 @@ fn restore_reused_window(
 fn read_new_lines(log_path: &Path, offset: u64) -> Result<(u64, Vec<String>)> {
     let mut file =
         File::open(log_path).with_context(|| format!("failed to open {}", log_path.display()))?;
+    // The app truncates oversized logs in place, including on startup.
+    let offset = if file.metadata()?.len() < offset { 0 } else { offset };
     file.seek(SeekFrom::Start(offset))?;
     let mut data = String::new();
     file.read_to_string(&mut data)?;

@@ -136,3 +136,16 @@ fn newest_trace_log_since_falls_back_when_no_newer_logs() {
     fs::remove_dir_all(temp).ok();
     drop(_guard);
 }
+
+#[test]
+fn trace_reader_recovers_when_the_running_app_truncates_its_log() {
+    let dir = unique_temp_dir("trace-truncation");
+    let path = dir.join("trace.log");
+    std::fs::write(&path, "old trace\n".repeat(100)).unwrap();
+    let offset = std::fs::metadata(&path).unwrap().len();
+    std::fs::write(&path, "new native frame\n").unwrap();
+    let (next, lines) = crate::read_new_lines(&path, offset).unwrap();
+    fs::remove_dir_all(dir).unwrap();
+    assert_eq!(lines, vec!["new native frame"]);
+    assert_eq!(next, 17);
+}

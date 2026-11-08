@@ -290,6 +290,9 @@ fn provider_data_dir(provider: Provider) -> Result<PathBuf> {
 }
 
 fn rust_chatbot_log_dir() -> Result<PathBuf> {
+    if let Some(path) = std::env::var_os("RUST_CHATBOT_LOG_DIR").filter(|path| !path.is_empty()) {
+        return Ok(PathBuf::from(path));
+    }
     if let Ok(path) = std::env::var("XDG_STATE_HOME") {
         return Ok(PathBuf::from(path).join("rust-chatbot"));
     }

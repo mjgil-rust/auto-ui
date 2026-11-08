@@ -62,6 +62,16 @@ fn get_i64(dict: &CFDictionary<CFString, CFType>, key: CFString) -> Option<i64> 
     })
 }
 
+fn is_capture_window(dict: &CFDictionary<CFString, CFType>) -> bool {
+    let layer = get_i64(dict, unsafe { CFString::wrap_under_get_rule(core_graphics::window::kCGWindowLayer) });
+    let named = get_string(dict, unsafe { CFString::wrap_under_get_rule(kCGWindowName) })
+        .is_some_and(|name| !name.trim().is_empty());
+    let onscreen = dict.find(unsafe { CFString::wrap_under_get_rule(core_graphics::window::kCGWindowIsOnscreen) })
+        .and_then(|value| value.downcast::<core_foundation::boolean::CFBoolean>())
+        .is_some_and(bool::from);
+    layer == Some(0) && named && onscreen
+}
+
 /// Run an AppleScript command and return its stdout.
 fn run_applescript(script: &str) -> Result<String> {
     use std::process::Command;
@@ -118,6 +128,10 @@ impl WindowDriver for MacOsWindowDriver {
         let windows = window_list();
         let mut matches = Vec::new();
         for dict in windows {
+            // Ignore offscreen helper/tooltip windows from the same process.
+            // AX geometry targets window 1, so capturing an arbitrary helper
+            // id otherwise measures one window and screenshots another.
+            if !is_capture_window(&dict) { continue; }
             if let Some(window_pid) = get_i64(&dict, unsafe {
                 CFString::wrap_under_get_rule(kCGWindowOwnerPID)
             }) {
@@ -264,7 +278,7 @@ impl WindowDriver for MacOsWindowDriver {
             .get_window_pid(window_id)?
             .ok_or_else(|| anyhow::anyhow!("cannot resize: window {window_id} has no PID"))?;
         let script = format!(
-            "tell application \"System Events\" to tell (first process whose unix id is {pid}) to set size of window 1 to {{{width}, {height}}}"
+            "tell application \"System Events\"\nrepeat 40\nif exists (first process whose unix id is {pid}) then\ntell (first process whose unix id is {pid})\nif (count of windows) > 0 then\nset size of window 1 to {{{width}, {height}}}\nreturn\nend if\nend tell\nend if\ndelay 0.05\nend repeat\nerror \"Accessibility window did not become ready\"\nend tell"
         );
         run_applescript(&script)?;
         self.get_geometry(window_id)
@@ -443,7 +457,19 @@ impl WindowDriver for MacOsWindowDriver {
             window_id_num,
             kCGWindowImageBoundsIgnoreFraming,
         ) else {
-            bail!("failed to capture screenshot for window {window_id}");
+            // CGWindowListCreateImage is unavailable on newer macOS releases.
+            // The system capture utility uses the supported capture backend
+            // and enforces the same Screen Recording permission.
+            let output = std::process::Command::new("/usr/sbin/screencapture")
+                .args(["-x", "-o", "-l", window_id])
+                .arg(output_path)
+                .output()
+                .context("failed to start native window capture")?;
+            if !output.status.success() {
+                bail!("failed to capture window {window_id}: {}", String::from_utf8_lossy(&output.stderr));
+            }
+            image::open(output_path).context("native capture did not produce a valid screenshot")?;
+            return Ok(());
         };
 
         let width = image.width();
